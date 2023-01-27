@@ -1,0 +1,344 @@
+import numpy as np
+
+class Stats(object):
+    '''
+    Statistics for the interaction-based classifiers for discrete random variables. It is the basis for the distributed
+    learning procedures of interaction-based classifiers
+    '''
+
+    def __init__(self, n, card, cardY, sets= None, X= None, Y=None):
+        # Number of variables, int. The class has index self.n in the dataset D
+        self.n= n
+        # Cardinality of variables, np.array(int)
+        self.card= card
+
+        self.cardY= cardY
+
+
+        # initialize the list of sets, list(tuple(set(int))), and the associated list of counts, list(np.array(card[S]))
+        if sets is not None:
+            #make a copy and transform to tuples
+
+            U,V= self._getUandVfromSets(sets)
+            self.initCounts(U,V)
+            # learn maximum likelihood statistics
+            if X is not None and Y is not None:
+                self.maximumLikelihood(X,Y)
+            else:
+                # Counts associated to subsets, dict(set:np.array(double, card[set]))
+                self.Nu = None
+                self.Nv = None
+        else:
+            # Subsets of variables, list(set(int))
+            self.U = None
+            self.V = None
+            # Counts associated to subsets, dict(set:np.array(double, card[set]))
+            self.Nu = None
+            self.Nv = None
+
+    def _getUandVfromSets(self, sets):
+        # put the tuples in standard format, tuple(set(whatever))
+        self.U= list()
+        self.V= list()
+
+        for S in sets:
+            if self.n in S:
+                self.U.append(tuple(s for s in S if s!= self.n))
+            else:
+                self.V.append(S)
+
+        return U,V
+
+    def initCounts(self, U= None, V= None, esz= 0):
+        '''
+        Take the list of set of variables and stores in standard form (tuple(set(int)) where the sets S with the class
+        (self.n in S) are stored in self.U (after removing the class variable), and the sets without it are stored in
+        self.V
+
+        //TODO hay que normalizar los estadisticos teniendo en cuenta el equivalent sample size, esz
+
+        :param U: set of variables associated to supervised statistics, list(set(int))
+        :param V: set of variables associated to unsupervised statistics, list(set(int))
+        :param esz: equivalent sample size
+        :return:
+        '''
+        # put the tuples in standard format, tuple(set(whatever))
+        if U is not None:
+            self.U= U
+        elif self.U is None:
+            self.U= []
+        if V is not None:
+            self.V= V
+        elif self.V is None:
+            self.V= []
+
+        if U is None:
+            for S in self.U:
+                self.Nu[S]= np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (
+                                        np.prod([self.card[s] for s in S]) * self.cardY)
+
+        else:
+            self.Nu = {S: np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (
+                                np.prod([self.card[s] for s in S]) * self.cardY) for S in self.U}
+
+        if V is None:
+            for S in self.V:
+                self.Nv[S]= np.ones(shape=tuple(self.card[s] for s in S)) * esz / np.prod([self.card[s] for s in S])
+        else:
+            self.Nv = {S: np.ones(shape=tuple(self.card[s] for s in S)) * esz /
+                                    np.prod([self.card[s] for s in S]) for S in self.V}
+
+
+        # Avoid problems with the count associated to the empty set of variables
+        if () in self.U: self.Nu[()]= np.ones(shape=self.cardY)* esz
+        if () in self.V: self.Nv[()]= np.ones(shape=1)* esz
+
+        return
+
+    def copy(self):
+        stats= Stats(self.n,self.card,self.cardY)
+        stats.initCounts(self.U,self.V)
+        for V in self.V:
+            stats.Nv[V]=self.Nv[V].copy()
+        for U in self.U:
+            stats.Nu[U]=self.Nu[U].copy()
+
+        return stats
+
+    def add(self, stats):
+        for S in stats.U:
+            if S in self.U:
+                self.Nu[S] += stats.Nu[S]
+            else:
+                self.Nu.update({S:stats.Nu[S]})
+
+        for S in stats.V:
+            if S in self.V:
+                self.Nv[S] += stats.Nv[S]
+            else:
+                self.Nv.update({S: stats.Nv[S]})
+
+    def subtract(self, stats):
+        for S in stats.U:
+            if S in self.U:
+                self.Nu[S] -= stats.Nu[S]
+            else:
+                self.Nu.update({S:-stats.Nu[S]})
+
+        for S in stats.V:
+            if S in self.V:
+                self.Nv[S] -= stats.Nv[S]
+            else:
+                self.Nv.update({S: -stats.Nv[S]})
+
+    def subtract_max(self, stats, prop_max):
+        '''
+        Subtract the statistics in a proportion that guarantees that the minimum is at least eps
+
+        self.stats= self.stats- prop*stats
+
+        :param stats: statistics to be subtracted.
+        :param maxprop: maximum value for the proportion prop
+        :return: prop
+        '''
+        # Find maximum proportion
+        prop= prop_max
+        for S in stats.U:
+            if S in self.U:
+                ind= self.Nu[S]- stats.Nu[S]<0
+                if np.any(ind):
+                    prop= np.min([np.min(self.Nu[S][ind]/ stats.Nu[S][ind]),prop])
+
+        for S in stats.V:
+            if S in self.V:
+                ind = self.Nv[S] - stats.Nv[S] < 0
+                if np.any(ind):
+                    prop = np.min([np.min(self.Nv[S][ind] / stats.Nv[S][ind]), prop])
+
+        if prop!= 1.0:
+            print("correction with proportion= "+str(prop))
+
+        # Substract the maximum proportion
+        for S in stats.U:
+            if S in self.U:
+                self.Nu[S] -= prop* stats.Nu[S]
+            else:
+                self.Nu.update({S:- prop* stats.Nu[S]})
+
+        for S in stats.V:
+            if S in self.V:
+                self.Nv[S] -= prop* stats.Nv[S]
+            else:
+                self.Nv.update({S: -prop* stats.Nv[S]})
+
+        return prop
+
+
+    def maximumLikelihood(self, X,Y, U= None, V= None, esz= 0.0):
+        '''
+        Learn the maximum likelihood parameters with complete data
+
+        :param X: instances, np.array(num-instances x num features, int)
+        :param Y: classes, np.array(num-instances, int)
+        :param esz: equivalent sample size
+        :return:
+        '''
+
+        # Initialize the statistics
+        self.initCounts(self.U if U is None else U, self.V if V is None else V , esz)
+
+        # Count the statistics in the data
+        m,n= X.shape
+        for S in self.U:
+            Nu= self.Nu[S]
+            for i in range(m):
+                Nu[tuple(X[i,S])][Y[i]] += 1
+
+        for S in self.V:
+            Nv= self.Nv[S]
+            for i in range(m):
+                Nv[tuple(X[i,S])] += 1
+
+
+        #for S in self.Nu.keys():
+        #    print(str(S) + ":\t" + str(np.sum(self.Nu[S])))
+
+        return
+
+
+    def maximumWLikelihood(self, X, pY, esz= 0.0):
+
+        # Initialize the statistics
+        self.initCounts(esz=esz)
+
+        # Count the statistics in the data
+        m, n = X.shape
+        for S in self.U:
+            Nu = self.Nu[S]
+            for i in range(m):
+                Nu[tuple(X[i, S])] += pY[i,:]
+
+        for S in self.V:
+            Nv = self.Nv[S]
+            for i in range(m):
+                Nv[tuple(X[i, S])] += 1
+
+        #for S in self.Nu.keys():
+        #    print(str(S) + ":\t" + str(np.sum(self.Nu[S])))
+
+
+    def conMaxLikelihood(self, X, h, eps= 10**-2, maxIter= 10, esz= 0.0):
+        '''
+        Learn conditional maximum likelihood parameters using the TM algorithm.
+
+        The main difference with IBD.leandCondMaxLikelihood is that in this method h is based on a subset of the
+        statistics from Stats. The TM step is given by
+
+        u^t= u^t-1 + u_0 - E^t-1[u]
+
+        where U in Stats, u_0 is given by currect stats (self), and E^t-1[u]= sum_{x in X} delta(x_U,u) h^t-1(y|x)
+
+        :param X: Unlabeled data
+        :param h: a classifier
+        :param esz:
+        :return:
+        '''
+
+        Theta0= Stats.copy()
+        h= h.copy()
+
+        cont= True
+        n_iter= 0
+        while(cont and n_iter< maxIter):
+            n_iter+=1
+
+            pY = h.getClassProbs(X)
+            Et = Stats.copy()
+            Et.maximumWLikelihood(X, pY, esz)
+
+            self.subtract(Et.subtract(Theta0))
+            h.setStats(self)
+
+            # Check validity of the parameters
+            for U in Et.U:
+                if np.any(self.stats.Nu[U] < 0):
+                    print("Negative parameters in: U=" + str(U))
+
+            # Check the convergence with precision eps
+            for U in Et.U:
+                if not np.allclose(Et.Nu[U], 0, atol=eps):
+                    cont = True
+                    break
+
+
+    def entropy(self,sets):
+        '''
+        Computes the entropy of a list of sets of variables
+        :param sets:
+        :return:
+        '''
+
+        H = np.zeros(len(sets))
+        for i,S in enumerate(sets):
+            if self.n in S:
+                S= tuple(s for s in S if s!= self.n)
+                if S in self.Nu:
+                    N= np.sum(self.Nu[S])
+                    H[i]= np.sum(np.log((N/self.Nu(S))**(self.Nu(S)/N)))
+                else:
+                    H[i]= np.nan
+            else:
+                S= tuple(S)
+                if S in self.Nv:
+                    N= np.sum(self.Nv[S])
+                    H[i]= np.sum(np.log((N/self.Nv(S))**(self.Nv(S)/N)))
+                else:
+                    H[i]= np.nan
+
+        return H
+
+
+    def _checkConsistency(self):
+        '''
+        It checks the consistency of the statistics under marginalization
+        :return:
+        '''
+
+        return True
+
+
+
+def marginalize(N_S, S, R):
+    '''
+    Marginalize the statistics associated with the set of variables S to obtain the statistics of the set of
+    variables R
+
+    Warning: the order of the variables in S and R have to be compatible. Thas is, the relative order of the elements
+    in R is preserver in S.
+
+    to be tested: 221125
+
+    :param N_S: Statistics of the variables in the set S
+    :param S: The set of variables, tuple(set(int))
+    :param R: A subset of variables of S, tuple(set(int))
+    :return: The statistics of the variable
+    '''
+
+    # find the indices of the variables of S setminus R
+    inds= list()
+    for iS,s in enumerate(S):
+        if s not in R:
+            inds.append(iS)
+
+    # marginalize
+    N_R= np.sum(N_S,axis=(inds))
+
+    return N_R
+
+
+
+
+
+
+
+
