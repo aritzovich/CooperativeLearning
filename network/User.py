@@ -14,7 +14,10 @@ class User(Client, Server):
         """
         Performs the corresponding actions in a user level.
         :param global_time: Global time to update the time of the computed statistics
-        :return: theta2 and theta2
+        :param policy: The user defined policy. If policy = info, the expectation is always made maximizing information
+        if policy = recent it computes the expectation with the most recent statistics
+        :return: Two lists containing the old statistics (theta2) and the newest statistics (theta1). No statistics from
+        theta2 have been used to compute statistics of theta1.
         """
         theta2, theta1 = None, None
         if len(self.theta1) > 1:
@@ -43,6 +46,7 @@ class User(Client, Server):
                 else:
                     theta2 = self.theta2[0]
             theta1 = self.aggregate(self.theta1[0], self.expectation(global_time, theta2))
+            theta2 = self.theta1[0]
         else:
             print(f"Situation not considered (NODEID {self.id}):\n\tTheta2 = {self.theta2}\n\t Theta1 = {self.theta1}")
 
@@ -54,6 +58,10 @@ class User(Client, Server):
         return theta2, theta1
 
     def is_statistic_inside(self):
+        """
+        Checks whether the user statistic is inside theta2 and theta1
+        :return: A tuple with two boolean values corresponding to is inside theta1 and is inside theta2 respectively
+        """
         inside_theta1 = False
         inside_theta2 = False
         for s in self.theta1[0]:

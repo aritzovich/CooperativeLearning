@@ -17,7 +17,6 @@ class Server:
         :param thetaB: Another list of statistics to aggregate
         :return: the aggregated list of statistics
         """
-        agg_stats = None
         if len(thetaA) == 0:
             agg_stats = thetaB
         elif len(thetaB) == 0:
@@ -28,6 +27,11 @@ class Server:
         return agg_stats
 
     def clean_duplicates(self, agg_stats):
+        """
+        Cleans any duplicates in the specified agg_stats list. In case of two duplicates, it takes the newest statistic
+        :param agg_stats: a 1D list with the sufficient statistics
+        :return: a list without duplicated statistics
+        """
         new_agg_stats = agg_stats.copy()
         to_delete = []
         for ix_s_r, s_r in enumerate(agg_stats):

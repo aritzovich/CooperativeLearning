@@ -13,7 +13,7 @@ class Client:
     def expectation(self, global_time, expectation_statistics):
         """
         Learns the maximum likelihood statistics from data or from received statistics
-        :param global_time: Global time to be used when generating the statistics if necessary
+        :param global_time: Global time to be used when generating the statistics
         :param expectation_statistics: List of received statistics from other users/clients
         :return: the resulting expectation
         """

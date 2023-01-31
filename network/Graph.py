@@ -59,7 +59,7 @@ class Graph:
         Plots the Directed Graph
         :return:
         """
-        nx.draw_networkx(self.G)
+        nx.draw_networkx(self.G, node_size=2000)
         plt.show()
 
     def start(self, node_name):
@@ -93,9 +93,26 @@ class Graph:
         print("FIN")
 
     def initialize_com_queue(self):
-        self.com_queue = ['Node0', 'Node2', 'Node1', 'Node0', 'Node1', 'Node0']
+        """
+        Hard-coded version for testing. It will be removed in further commits
+        """
+        # l = ['Node0', 'Node1', 'Node0', 'Node1', 'Node2', 'Node0']
+        l = ['Node0', 'Node3', 'Node0', 'Node3', 'Node1', 'Node2', 'Node0']
+        l.reverse()
+        self.com_queue = l
+
+    def generate_random_com_queue(self, size):
+        """
+        Generates a random communication queue with the specified size
+        """
+        node_names = list(self.G.nodes.keys())
+        l = np.random.choice(node_names, size, replace=True)
+        self.com_queue = l.tolist()
 
     def get_user_data(self, node_name):
+        """
+        Returns the data of the specific networkx node
+        """
         return self.G.nodes(data=True)[node_name]['data']
 
     def restore_ancestor_control(self):
@@ -117,6 +134,9 @@ class Graph:
         return False
 
     def replace_children_ix_with_data(self):
+        """
+        Replaces the children index list with the children data so it is easier to access to the children.
+        """
         for node_name in self.G.nodes:
             node = self.get_user_data(node_name)
             children_list = []
@@ -129,7 +149,13 @@ class Graph:
                 parents_list.append(p_data)
             node.children = children_list
             node.parents = parents_list
+            
 def flatten(xs):
+    """
+    A generic function to flatten a list of lists
+    :param xs: the list of lists to be flatten
+    :return: the flatten list
+    """
     for x in xs:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
             yield from flatten(x)
