@@ -74,6 +74,9 @@ class IBC(object):
                     self.expV[pa]-= 1
                 else:
                     self.expV.update({pa:-1})
+
+        self.initStats()
+
         return
 
     def setKOrderStruct(self,k=2):
@@ -94,6 +97,8 @@ class IBC(object):
             for S in itr.combinations(range(self.n),s):
                 self.expU.update({tuple(set(S)):e_s[s]})
 
+        self.initStats()
+
         return
 
     def _exp_s(self,k,n):
@@ -109,6 +114,12 @@ class IBC(object):
             e[s]= 1- np.sum([binom(n-s,r-s)*e[r] for r in range(s+1,k+1)])
 
         return e
+
+    def initStats(self):
+
+        self.stats= st.Stats(self.n, self.card, self.cardY)
+        self.stats.initCounts(self.expU.keys(),self.expV.keys())
+
 
     def setStats(self,stats):
         '''
@@ -138,80 +149,84 @@ class IBC(object):
         :return:
         '''
 
-        self.stats= st.Stats(self.n, self.card, self.cardY)
-        self.stats.maximumLikelihood(X, Y, self.expU.keys(), self.expV.keys(), esz=esz)
+        self.initStats()
+        self.stats.maximumLikelihood(X, Y, esz=esz)
 
-    def learnCondMaxLikelihood(self,X, Y, stats= None, eps= 10**-3, max_iter= 10, esz= 0):
+    def learnCondMaxLikelihood(self, X, Y, stats= None, stats0= None, max_iter= 10, esz= 0, lr= 1.0, trace= False):
         '''
         The TM algorithm
+
+          u^t+1= u^t - lr · (E^t-u_0)
+
+        where u^0 are the initial statistics, E^t is the maximum likelihood statistics obtained from X,p(Y|X,u^t)
+        and u_0 are the reference statistics
+
         :param X:
         :param Y:
-        :param stats:
-        :param eps:
-        :param max_iter:
-        :param esz:
-        :return:
+        :param stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
+        :param stats0: if not None, the reference statistics that define the likelihood problem
+        :param max_iter: maximum iterations of
+        :param esz: equivalent sample size
+        :param trace: if Trace returns a summary of the execution of the TM False by default.
+        :return: if trace then returns the list of the CLL np.array(double)
+        and the corresponding list of Stats list(Stats)
         '''
-
-        if stats is not None:
-            # Get the parameters for the starting model, u^t=0
-            self.setStats(stats)
-        else:
-            # the statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
-            self.learnMaxLikelihood(X,Y,esz=esz)
 
         m,n= X.shape
 
-        # maximum likelihood statistics. Required for the update U^t= U^{t-1} + U^0 - E_{N^{t-1}}[U|x]
-        stats0= st.Stats(self.n,self.card,self.cardY)
-        stats0.initCounts(self.stats.U,V=list())
-        stats0.maximumLikelihood(X,Y,esz=esz)
 
-        # Expectances E_{N^{t-1}}[U|x]
-        Et= st.Stats(self.n,self.card,self.cardY)
-        Et.initCounts(U= self.stats.U)
+        if stats is not None:
+            # The initial statistics
+            self.stats= stats.copy()
+        else:
+            # The statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
+            self.learnMaxLikelihood(X,Y,esz=esz)
+
+        if stats0 is None:
+            # maximum likelihood statistics. Required for the update U^t= U^{t-1} + U^0 - E_{N^{t-1}}[U|x]
+            stats0= self.stats.emptyCopy()
+            stats0.maximumLikelihood(X,Y,esz= esz)
 
         cont= True
         n_iter= 0
-        prop_max= 1.0
-        CLL= list()
+
+        evolCLL = list()
+        if trace:
+            evolStats= list()
+
         while(cont and n_iter< max_iter):
-            cont= False
+            cont= True
             n_iter+= 1
 
             # Compute the conditional probability
             pY= self.getClassProbs(X)
 
-            CLL.append(np.sum(np.log(pY[range(m),Y])))
-
-            # U^t= U^{t-1} - (E_{N^{t-1}}[U|x] - U^0)
-            Et.maximumWLikelihood(X,pY,esz=esz)
-            Et.subtract(stats0)
-            #prop_max= self.stats.subtract_max(Et,prop_max)
-            self.stats.substract(Et)
-            self.stats.subtract_max(Et,prop_max=0.5)
+            # Compute and store de cond. log. likel.
+            evolCLL.append(np.sum(np.log(pY[range(m),Y])))
+            if trace:
+                evolStats.append(self.stats.copy())
 
             if n_iter>1:
-                if CLL[-1]<CLL[-2]:
-                    self.stats.add(Et)
-                    return np.array(CLL)[:-1]
+                #Stoping criteria: CLL does not improve
+                if evolCLL[-1]<= evolCLL[-2]:
+                    cont= False
+                    # undo the update of the statistics
+                    N= self.stats.getSampleSize()
+                    N_MWL= MWL.getSampleSize()
+                    self.stats.add(MWL, lr= lr*N/N_MWL)
+                    N_0= stats0.getSampleSize()
+                    self.stats.subtract(stats0, lr= lr*N/N_0)
 
-            # Check validity of the parameters
-            for U in Et.U:
-                if np.any(self.stats.Nu[U]< 0):
-                    print("Negative parameters in: U="+ str(U))
-                    self.stats.add(Et)
-                    return np.array(CLL)[:-1]
-                #if not np.allclose(a=[np.sum(self.stats.Nu[S]) for S in self.stats.Nu.keys()],b=m+esz, atol= eps):
-                #    print(str([np.sum(self.stats.Nu[S]) for S in self.stats.Nu.keys()]))
+                    del evolCLL[-1]
+                    if trace:
+                        del evolStats[-1]
 
-            # Check the convergence with precision eps
-            for U in Et.U:
-                if not np.allclose(Et.Nu[U], 0, atol=eps):
-                    cont = True
-                    break
+            MWL= self.stats.update(X,pY,stats0,lr= lr, esz= esz)
 
-        return np.array(CLL)
+        if trace:
+            return (np.array(evolCLL), evolStats)
+        else:
+            return np.array(evolCLL)
 
     def getClassProbs(self,X):
         m,n= X.shape

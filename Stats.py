@@ -96,6 +96,11 @@ class Stats(object):
         return
 
     def copy(self):
+        '''
+        Creates a copy of the statistics self.
+
+        :return: A copy of the statistics self.
+        '''
         stats= Stats(self.n,self.card,self.cardY)
         stats.initCounts(self.U,self.V)
         for V in self.V:
@@ -105,73 +110,107 @@ class Stats(object):
 
         return stats
 
-    def add(self, stats):
+    def emptyCopy(self):
+        '''
+        Creates an empty copy of the statistics self.
+
+        :return: An empty copy of the statistics self.
+        '''
+        stats = Stats(self.n, self.card, self.cardY)
+        stats.initCounts(self.U, self.V)
+
+        return stats
+
+    def getSampleSize(self):
+        '''
+        Get the sample size of the statistics
+        :return:
+        '''
+
+        if bool(self.Nv):
+            return np.sum(next(iter(self.Nv.values())))
+
+        if bool(self.Nu):
+            return np.sum(next(iter(self.Nu.values())))
+
+        return 0
+
+    def add(self, stats, prop= 1.0):
         for S in stats.U:
             if S in self.U:
-                self.Nu[S] += stats.Nu[S]
+                self.Nu[S] += stats.Nu[S] * prop
             else:
-                self.Nu.update({S:stats.Nu[S]})
+                self.Nu.update({S:stats.Nu[S] * prop})
 
         for S in stats.V:
             if S in self.V:
-                self.Nv[S] += stats.Nv[S]
+                self.Nv[S] += stats.Nv[S] * prop
             else:
-                self.Nv.update({S: stats.Nv[S]})
+                self.Nv.update({S: stats.Nv[S] * prop})
 
-    def subtract(self, stats):
+    def subtract(self, stats, prop= 1.0):
         for S in stats.U:
             if S in self.U:
-                self.Nu[S] -= stats.Nu[S]
+                self.Nu[S] -= stats.Nu[S] * prop
             else:
-                self.Nu.update({S:-stats.Nu[S]})
+                self.Nu.update({S:-stats.Nu[S]} * prop)
 
         for S in stats.V:
             if S in self.V:
-                self.Nv[S] -= stats.Nv[S]
+                self.Nv[S] -= stats.Nv[S] * prop
             else:
-                self.Nv.update({S: -stats.Nv[S]})
+                self.Nv.update({S: -stats.Nv[S] * prop})
 
-    def subtract_max(self, stats, prop_max):
+    def update(self, X, pY, ref_stats, lr=1.0, esz= 0):
+        '''
+        This method udpate the statistics:
+
+        self = self - lr · (max_likel_stats(X,pY) - ref_stats)
+
+        The implied statistics are scaled to the sample size of self.
+
+        :param X: Unsupervised data
+        :param pY: probability of the class for the samples X
+        :param ref_stats: the reference statistics
+        :param lr: learning rate
+        :return: max_likel_stats(X,pY)
+        '''
+
+        MWL= self.emptyCopy()
+        MWL.maximumWLikelihood(X, pY, esz=esz)
+        N_MWL= MWL.getSampleSize()
+        N_ref= ref_stats.getSampleSize()
+        N= self.getSampleSize()
+
+        self.add(ref_stats, prop=lr*N/N_ref)
+        self.subtract(MWL, prop=lr*N/N_MWL)
+
+        return MWL
+
+    def min_ratio(self, stats):
         '''
         Subtract the statistics in a proportion that guarantees that the minimum is at least eps
 
-        self.stats= self.stats- prop*stats
+        min(self.stats/stats)
 
-        :param stats: statistics to be subtracted.
-        :param maxprop: maximum value for the proportion prop
-        :return: prop
+        :return: min(self.stats/stats)
         '''
         # Find maximum proportion
-        prop= prop_max
+        propU= 1.0
         for S in stats.U:
             if S in self.U:
                 ind= self.Nu[S]- stats.Nu[S]<0
                 if np.any(ind):
-                    prop= np.min([np.min(self.Nu[S][ind]/ stats.Nu[S][ind]),prop])
+                    propU= np.min([np.min(self.Nu[S][ind]/ stats.Nu[S][ind]),prop])
 
+        propV= 1.0
         for S in stats.V:
             if S in self.V:
                 ind = self.Nv[S] - stats.Nv[S] < 0
                 if np.any(ind):
-                    prop = np.min([np.min(self.Nv[S][ind] / stats.Nv[S][ind]), prop])
+                    propV = np.min([np.min(self.Nv[S][ind] / stats.Nv[S][ind]), prop])
 
-        if prop!= 1.0:
-            print("correction with proportion= "+str(prop))
-
-        # Substract the maximum proportion
-        for S in stats.U:
-            if S in self.U:
-                self.Nu[S] -= prop* stats.Nu[S]
-            else:
-                self.Nu.update({S:- prop* stats.Nu[S]})
-
-        for S in stats.V:
-            if S in self.V:
-                self.Nv[S] -= prop* stats.Nv[S]
-            else:
-                self.Nv.update({S: -prop* stats.Nv[S]})
-
-        return prop
+        return (propU,propV)
 
 
     def maximumLikelihood(self, X,Y, U= None, V= None, esz= 0.0):
@@ -227,7 +266,7 @@ class Stats(object):
         #    print(str(S) + ":\t" + str(np.sum(self.Nu[S])))
 
 
-    def conMaxLikelihood(self, X, h, eps= 10**-2, maxIter= 10, esz= 0.0):
+    def condMaxLikelihood(self, X, h, eps= 10**-2, maxIter= 10, esz= 0.0):
         '''
         Learn conditional maximum likelihood parameters using the TM algorithm.
 
@@ -297,6 +336,15 @@ class Stats(object):
 
         return H
 
+
+    def serialize(self):
+        '''
+        Creates a np.array(double) with all the supervised statistics
+
+        :return: The concatenation of the flattened supervised statistics
+        '''
+
+        return np.concatenate([Nu.flatten() for Nu in self.Nu.values()])
 
     def _checkConsistency(self):
         '''
