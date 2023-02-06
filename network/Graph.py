@@ -1,112 +1,70 @@
-from collections.abc import Iterable
-
+from network import Utils
 from network.User import User
-from scipy.stats import norm
 import numpy as np
-import networkx as nx
-import matplotlib.pyplot as plt
 
 
 class Graph:
     com_queue = []
     global_time = 1
 
-    def __init__(self, adjacency_matrix, max_iterations, start_node, node_names, policy, show_graph=True):
+    def __init__(self, adjacency_matrix, policy, data, structure, data_domain=None, exec_sequence=None, size=None, show_graph=False):
         self.policy = policy
-        self.node_name_num_correspondence = {}
-        for ix, nm in enumerate(node_names):
-            self.node_name_num_correspondence[nm] = ix
+        # Distribute data uniformly over the nodes
+        # TODO: DIRITCHLET?
+        idx = np.arange(0, data.shape[0])  # Create the index column that is going to be split
+        n_splits = len(adjacency_matrix)
+        bins = np.linspace(0, n_splits, idx.size, endpoint=False).astype(int)
+        bins = bins[idx.argsort().argsort()]
+        # for b in np.unique(bins):
+        #     self.user_list[b].data = data[bins == b, :]
+        self.user_list = [User(children=np.where(adjacency_matrix[i, :] == 1)[0].tolist(),
+                               parents=np.where(adjacency_matrix[:, i] == 1)[0].tolist(),
+                               classif_structure=structure,
+                               data=data[bins == i, :],
+                               data_domain=data_domain if data_domain else None,
+                               identifier=i)
+                          for i in range(len(adjacency_matrix))]
+        self.fill_children()
         self.adjacency_matrix = adjacency_matrix  # Rows => FROM, Columns => TO
-        self.max_iterations = max_iterations
-        self.com_queue.insert(0, start_node)
-        self.com_queue = list(flatten(self.com_queue))  # To flatten the list
-        self.com_manager = adjacency_matrix - 1  # Creates the com manager
+        if exec_sequence:
+            self.com_queue = exec_sequence
+        elif exec_sequence == "generate":
+            self.generate_random_com_queue(size=size)
 
-        self.G = nx.DiGraph()  # Create an empty directed graph
-        # Now create the edges
-        for ix_r, row in enumerate(self.adjacency_matrix):
-            children_node = np.squeeze(np.where(self.adjacency_matrix[ix_r, :]))
-            if np.size(children_node) > 1:
-                children_node = [node_names[c] for c in children_node]  # So that we always index by node_name
-            else:
-                children_node = [node_names[children_node]]
-            parents_node = np.squeeze(np.where(self.adjacency_matrix[:, ix_r]))
-            if np.size(parents_node) > 1:
-                parents_node = [node_names[c] for c in parents_node]
-            else:
-                parents_node = [node_names[parents_node]]
-            self.G.add_node(node_names[ix_r], data=User(children_node, parents_node, node_names[ix_r]))
-            for ix_c, column in enumerate(self.adjacency_matrix):
-                if self.adjacency_matrix[ix_r, ix_c]:
-                    self.G.add_edge(node_names[ix_r], node_names[ix_c])
-        self.replace_children_ix_with_data()
-        # # Set the ancestors for the Users
-        # self.ancestor_control = np.zeros((len(node_names), len(node_names)))
-        # self.ancestor_control.fill(-1)  # We set to -1
-        # self.ancestor_control_template = np.copy(self.ancestor_control)  # We store the template for next iterations
-        # for nm in node_names:
-        #     nm_ix = self.node_name_num_correspondence[nm]
-        #     ancestors = nx.ancestors(self.G, nm)
-        #     for a in ancestors:
-        #         a_ix = self.node_name_num_correspondence[a]
-        #         self.ancestor_control[nm_ix, a_ix] = 0  # We initialize to False
-        # Show the graph
         if show_graph:
-            self.show_graph()
+            Utils.show_graph(adjacency_matrix)
 
-    def show_graph(self):
-        """
-        Plots the Directed Graph
-        :return:
-        """
-        nx.draw_networkx(self.G, node_size=2000)
-        plt.show()
-
-    def start(self, node_name):
+    def start(self):
         """
         Initial function to start the iterative algorithm
-        :param node_name: Node name to start from
         :return: None
         """
-        self.initialize_com_queue()
-        actual_user = self.get_user_data(self.com_queue[len(self.com_queue)-1])
-        actual_user.enqueue_stats([], [])
 
-        while self.max_iterations > 0 and len(self.com_queue) > 0:
+        while len(self.com_queue) > 0:
             # Get the next user from the queue
-            actual_user_name = self.com_queue.pop()
-            actual_user = self.get_user_data(actual_user_name)
+            actual_user_ix = self.com_queue.pop()
+            actual_user = self.user_list[actual_user_ix]
 
             print(f"===> GLOBAL TIME: {self.global_time}")
-            print("Quién soy: " + actual_user_name)
+            print(f"Quién soy: {actual_user_ix}")
             print("Qué tengo:")
-            print(f"\tTheta 2: {actual_user.theta2}")
-            print(f"\tTheta 1: {actual_user.theta1}")
-            print(f"A quién mando: {[str(c.id)+', '  for c in actual_user.children]}")
+            print(f"\tStats Old: {actual_user.stats_old}")
+            print(f"\tStats New: {actual_user.stats_new}")
+            print(f"A quién mando: {[c.id for c in actual_user.children]}")
             print(f"Qué mando:")
-            theta2, theta1 = actual_user.compute(self.global_time, self.policy)
-            print(f"\tTheta 2: {theta2}")
-            print(f"\tTheta 1: {theta1}")
+            stats_old, stats_new = actual_user.compute(self.global_time, self.policy)
+            print(f"\tStats Old: {['(' + str(s) + '-' + str(stats_old[s][1]) + ')' for s in stats_old]}")
+            print(f"\tStats New: {['(' + str(s) + '-' + str(stats_new[s][1]) + ')' for s in stats_new]}")
             print("")
             print("")
             self.global_time += 1  # Increment the time when the communications are made
         print("FIN")
 
-    def initialize_com_queue(self):
-        """
-        Hard-coded version for testing. It will be removed in further commits
-        """
-        # l = ['Node0', 'Node1', 'Node0', 'Node1', 'Node2', 'Node0']
-        l = ['Node0', 'Node3', 'Node0', 'Node3', 'Node1', 'Node2', 'Node0']
-        l.reverse()
-        self.com_queue = l
-
     def generate_random_com_queue(self, size):
         """
         Generates a random communication queue with the specified size
         """
-        node_names = list(self.G.nodes.keys())
-        l = np.random.choice(node_names, size, replace=True)
+        l = np.random.choice(self.user_list, size, replace=True)
         self.com_queue = l.tolist()
 
     def get_user_data(self, node_name):
@@ -149,15 +107,9 @@ class Graph:
                 parents_list.append(p_data)
             node.children = children_list
             node.parents = parents_list
-            
-def flatten(xs):
-    """
-    A generic function to flatten a list of lists
-    :param xs: the list of lists to be flatten
-    :return: the flatten list
-    """
-    for x in xs:
-        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
-            yield from flatten(x)
-        else:
-            yield x
+
+    def fill_children(self):
+        for user in self.user_list:
+            usr_children_lst = user.children
+            usr_children_lst_full = [self.user_list[ch] for ch in usr_children_lst]
+            user.children = usr_children_lst_full

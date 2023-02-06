@@ -2,11 +2,10 @@ from network.Client import Client
 from network.Server import Server
 
 
-class User(Client, Server):
+class User(Client, Server): 
 
-    def __init__(self, children, parents, identifier):
-        super().__init__(identifier)
-        super().__init__(identifier)
+    def __init__(self, children, parents, identifier, classif_structure, data, data_domain=None):
+        super(User, self).__init__(identifier, classif_structure, data, data_domain)  # For the Client
         self.children = children
         self.parents = parents
 
@@ -16,98 +15,91 @@ class User(Client, Server):
         :param global_time: Global time to update the time of the computed statistics
         :param policy: The user defined policy. If policy = info, the expectation is always made maximizing information
         if policy = recent it computes the expectation with the most recent statistics
-        :return: Two lists containing the old statistics (theta2) and the newest statistics (theta1). No statistics from
-        theta2 have been used to compute statistics of theta1.
+        :return: Two lists containing the old statistics (stats_old) and the newest statistics (stats_new). No statistics from
+        stats_old have been used to compute statistics of stats_new.
         """
-        theta2, theta1 = None, None
-        if len(self.theta1) > 1:
+        stats_old, stats_new = None, None
+        if len(self.stats_new) > 1:
             # This node has received multiple statistics from multiple nodes, we need to resolve this before computing
             self.resolve_multiple_lists()
 
-        inside_theta1, inside_theta2 = self.is_statistic_inside()
+        # inside_theta1, inside_theta2 = self.is_statistic_inside()
+        inside_theta1 = self.id in self.stats_new[0].keys()
+        inside_theta2 = self.id in self.stats_old[0].keys()
         if not inside_theta2:
-            theta1 = self.theta1[0]
-            theta2 = self.aggregate(self.theta2[0], self.expectation(global_time, []))
+            stats_new = self.stats_new[0]
+            stats_old = self.aggregate(self.stats_old[0], self.expectation(global_time, []))
         elif inside_theta2 and not inside_theta1:
-            theta1 = self.aggregate(self.theta1[0], self.expectation(global_time, self.theta2[0]))
-            theta2 = self.theta2[0]
+            stats_new = self.aggregate(self.stats_new[0], self.expectation(global_time, self.stats_old[0]))
+            stats_old = self.stats_old[0]
         elif inside_theta2 and inside_theta1:
             # Decide depending on policy
             if policy == "info":
-                if len(self.theta1[0]) > len(self.theta2[0]):
-                    theta2 = self.theta1[0]
+                if len(self.stats_new[0]) > len(self.stats_old[0]):
+                    stats_old = self.stats_new[0]
                 else:
-                    theta2 = self.theta2[0]
+                    stats_old = self.stats_old[0]
             elif policy == "recent":
-                creation_time_theta1 = [s.time for s in self.theta1[0] if s.id == self.id]
-                creation_time_theta2 = [s.time for s in self.theta2[0] if s.id == self.id]
+                creation_time_theta1 = [s[2] for s in self.stats_new[0] if s[1] == self.id]
+                creation_time_theta2 = [s[2] for s in self.stats_old[0] if s[1] == self.id]
                 if creation_time_theta1 > creation_time_theta2:
-                    theta2 = self.theta1[0]
+                    stats_old = self.stats_new[0]
                 else:
-                    theta2 = self.theta2[0]
-            theta1 = self.aggregate(self.theta1[0], self.expectation(global_time, theta2))
-            theta2 = self.theta1[0]
+                    stats_old = self.stats_old[0]
+            stats_new = self.aggregate(self.stats_new[0], self.expectation(global_time, stats_old))
+            stats_old = self.stats_new[0]
         else:
-            print(f"Situation not considered (NODEID {self.id}):\n\tTheta2 = {self.theta2}\n\t Theta1 = {self.theta1}")
+            print(f"Situation not considered (NODEID {self.id}):\n\tTheta2 = {self.stats_old}\n\t Theta1 = {self.stats_new}")
 
         for ch in self.children:
-            ch.enqueue_stats(theta2, theta1)
+            ch.enqueue_stats(stats_old, stats_new)
 
-        self.theta1 = []
-        self.theta2 = []
-        return theta2, theta1
+        self.stats_new = []
+        self.stats_old = []
+        return stats_old, stats_new
 
-    def is_statistic_inside(self):
-        """
-        Checks whether the user statistic is inside theta2 and theta1
-        :return: A tuple with two boolean values corresponding to is inside theta1 and is inside theta2 respectively
-        """
-        inside_theta1 = False
-        inside_theta2 = False
-        for s in self.theta1[0]:
-            if s.name == self.id:
-                inside_theta1 = True
-        for s in self.theta2[0]:
-            if s.name == self.id:
-                inside_theta2 = True
-        return inside_theta1, inside_theta2
+    # def is_statistic_inside(self):
+    #     """
+    #     Checks whether the user statistic is inside stats_old and stats_new
+    #     :return: A tuple with two boolean values corresponding to is inside stats_new and is inside stats_old respectively
+    #     """
+    #     inside_theta1 = False
+    #     inside_theta2 = False
+    #     for s in self.stats_new[0]:
+    #         if s[1] == self.id:
+    #             inside_theta1 = True
+    #     for s in self.stats_old[0]:
+    #         if s[1] == self.id:
+    #             inside_theta2 = True
+    #     return inside_theta1, inside_theta2
 
-    def enqueue_stats(self, theta2, theta1):
+    def enqueue_stats(self, stats_old, stats_new):
         """
         Enqueues the received statistics
-        :param theta2: Old received statistics
-        :param theta1: New received statistics
+        :param stats_old: Old received statistics
+        :param stats_new: New received statistics
         :return: None
         """
-        self.theta2.append(theta2)
-        self.theta1.append(theta1)
+        self.stats_old.append(stats_old)
+        self.stats_new.append(stats_new)
 
     def resolve_multiple_lists(self):
         """
-        Selects one theta1 and theta2 from the available statistics lists. It is possible that the resulting thetaX is
-        an aggregation of multiple thetas but without mixing elements from theta1 and theta2.
+        Selects one stats_new and stats_old from the available statistics lists. It is possible that the resulting
+        stats_lst is an aggregation of multiple stats_lst but without mixing elements from stats_new and stats_old.
         """
-        # First select one theta1
-        tA = self.theta1[0]
-        for it in range(1, len(self.theta1)):
-            tB = self.theta1[it]
+        # First select one stats_new
+        tA = self.stats_new[0]
+        for it in range(1, len(self.stats_new)):
+            tB = self.stats_new[it]
             tA = self.aggregate(tA, tB)
-        theta1 = tA
-        # Now do the same with theta2
-        tA = self.theta2[0]
-        for it in range(1, len(self.theta2)):
-            tB = self.theta2[it]
+        stats_new = tA
+        # Now do the same with stats_old
+        tA = self.stats_old[0]
+        for it in range(1, len(self.stats_old)):
+            tB = self.stats_old[it]
             tA = self.aggregate(tA, tB)
-        theta2 = tA
+        stats_old = tA
 
-        # # We get the one with more statistics
-        # lengths = [len(l) for l in self.theta1]
-        # theta1 = self.theta1[lengths.index(max(lengths))]
-        # # Select one theta2
-        # # We get the one with most statistics
-        # lengths = [len(l) for l in self.theta2]
-        #
-        # theta2 = self.theta2[lengths.index(max(lengths))]
-
-        self.theta1 = [theta1]
-        self.theta2 = [theta2]
+        self.stats_new = [stats_new]
+        self.stats_old = [stats_old]

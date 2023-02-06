@@ -163,7 +163,7 @@ class Stats(object):
 
     def update(self, X, pY, ref_stats, lr=1.0, esz= 0):
         '''
-        This method udpate the statistics:
+        This method update the statistics:
 
         self = self - lr · (max_likel_stats(X,pY) - ref_stats)
 
