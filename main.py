@@ -8,6 +8,69 @@ import matplotlib.pyplot as plt
 import sklearn as sk
 import Stats as st
 import IBC as ibc
+import ContStats as cst
+
+def loadSuperisedData(dataName= 'glass.csv', classInd=None, sep=',', maxDiscVals=5, skipHeader= 1):
+    '''
+    Load a supervised classification data in csv format: each row contains an instance (case), each column corresponds
+    to the values of random variable. The values included in each row are separated by a string given by the parameter
+    sep, e.g., ",". The column of the class variable is given by classInd, and in case of classInd==None the class
+    variable corresponds to the last column.
+
+    A variable is considered discrete when i) the values are strings, or 2) the number of values it takes is smaller or
+    equal to maxDiscVals.
+
+    :return: the data set np.array(numCases x numVars), and the cardinality of the variables where continuous have
+    np.inf cardinality
+    '''
+
+    text = np.genfromtxt(dataName, dtype= np.str, delimiter=sep, skip_header= skipHeader)
+    (m, n) = text.shape
+    if classInd is None:
+        classInd= n-1
+
+    # Determine the nature of the variables (categorical or continuous)
+    card = np.zeros(n)
+    for i in range(n):
+        if i != classInd:
+            vals= np.unique(text[:, i])
+            if str.isalpha(text[0, i]):
+                card[i]= len(vals)
+
+            elif str.isdigit(text[0, i]):  # if all characters in the string are alphabetic or there is at least one character
+                if len(vals)<= maxDiscVals:
+                    card[i] = len(vals)
+                else:
+                    card[i] = np.inf
+            else:
+                if len(vals) <= maxDiscVals:
+                    card[i] = len(vals)
+                else:
+                    card[i] = np.inf
+        else:
+            card[i]= len(np.unique(text[:,i]))
+
+
+    data = np.zeros((m,n))
+    for i in range(n):
+        if card[i] is not np.inf:
+            data[:,i] = np.unique(text[:, i], return_inverse=True)[1]
+        else:
+            data[:,i] = np.array([np.float(x) for x in text[:, i]])
+
+
+    return data,card
+
+
+
+def pruevas_contStat(dataName= 'glass'):
+
+    D,card= loadSuperisedData('./data/'+dataName+'.csv')
+
+    print(str(card)+'\n'+str(D))
+
+
+
 
 def pruebas(structs= ["NB"], domain= "ParSum", ms=[500],ns=[10],seed= 1, r= 2):
 
@@ -198,6 +261,8 @@ def generateData(domain= "ParSum", m=10, n=5, r= 4):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+
+    pruevas_contStat()
 #    pruebas()
-    TMevolution(n=10, m=100, r=2, seed=0)
+#    TMevolution(n=10, m=100, r=2, seed=0)
 

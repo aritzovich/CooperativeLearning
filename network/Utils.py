@@ -39,7 +39,8 @@ def plotParameters2D(line_id, x, y, score, savePath=None):
     unique_types = np.unique(d[:, 0])
     for t in unique_types:
         subset = d[d[:, 0] == t, :]
-        plt.plot(subset[:, 1], subset[:, 2], linestyle='-')
+        if t!= 0:
+            plt.plot(subset[:, 1], subset[:, 2], linestyle='-')
         plt.scatter(subset[:, 1], subset[:, 2], marker='o', c=subset[:, 3], s=200)
     plt.colorbar()
     if savePath:
@@ -64,7 +65,8 @@ def plotParameters3D(line_id, x, y, z, score, savePath=None):
     unique_types = np.unique(d[:, 0])
     for t in unique_types:
         subset = d[d[:, 0] == t, :]
-        ax.plot(subset[:, 1], subset[:, 2], subset[:, 3], linestyle='-')
+        if t!= 0:
+            ax.plot(subset[:, 1], subset[:, 2], subset[:, 3], linestyle='-')
         p = ax.scatter(subset[:, 1], subset[:, 2], subset[:, 3], marker='o', c=subset[:, 4], s=200)
     plt.colorbar(p)
     if savePath:

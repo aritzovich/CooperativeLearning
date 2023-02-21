@@ -55,7 +55,6 @@ class Stats(object):
         (self.n in S) are stored in self.U (after removing the class variable), and the sets without it are stored in
         self.V
 
-        //TODO hay que normalizar los estadisticos teniendo en cuenta el equivalent sample size, esz
 
         :param U: set of variables associated to supervised statistics, list(set(int))
         :param V: set of variables associated to unsupervised statistics, list(set(int))
@@ -90,7 +89,7 @@ class Stats(object):
 
 
         # Avoid problems with the count associated to the empty set of variables
-        if () in self.U: self.Nu[()]= np.ones(shape=self.cardY)* esz
+        if () in self.U: self.Nu[()]= np.ones(shape=self.cardY)* esz/self.cardY
         if () in self.V: self.Nv[()]= np.ones(shape=1)* esz
 
         return
@@ -104,9 +103,13 @@ class Stats(object):
         stats= Stats(self.n,self.card,self.cardY)
         stats.initCounts(self.U,self.V)
         for V in self.V:
-            stats.Nv[V]=self.Nv[V].copy()
+            stats.M0v[V]=self.M0v[V].copy()
+            stats.M1v[V] = self.M0v[V].copy()
+            stats.M2v[V] = self.M0v[V].copy()
         for U in self.U:
-            stats.Nu[U]=self.Nu[U].copy()
+            stats.M0[U]=self.M0[U].copy()
+            stats.M1[U]=self.M1[U].copy()
+            stats.M2[U]=self.M2[U].copy()
 
         return stats
 
@@ -127,11 +130,11 @@ class Stats(object):
         :return:
         '''
 
-        if bool(self.Nv):
-            return np.sum(next(iter(self.Nv.values())))
+        if bool(self.M0v):
+            return np.sum(next(iter(self.M0v.values())))
 
-        if bool(self.Nu):
-            return np.sum(next(iter(self.Nu.values())))
+        if bool(self.M0u):
+            return np.sum(next(iter(self.M0u.values())))
 
         return 0
 
