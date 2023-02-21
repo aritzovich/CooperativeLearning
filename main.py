@@ -10,7 +10,7 @@ import Stats as st
 import IBC as ibc
 import ContStats as cst
 
-def loadSuperisedData(dataName= 'glass.csv', classInd=None, sep=',', maxDiscVals=5, skipHeader= 1):
+def loadSupervisedData(dataName= 'glass.csv', classInd=None, sep=',', maxDiscVals=5, skipHeader= 1):
     '''
     Load a supervised classification data in csv format: each row contains an instance (case), each column corresponds
     to the values of random variable. The values included in each row are separated by a string given by the parameter
@@ -65,7 +65,7 @@ def loadSuperisedData(dataName= 'glass.csv', classInd=None, sep=',', maxDiscVals
 
 def pruevas_contStat(dataName= 'glass'):
 
-    D,card= loadSuperisedData('./data/'+dataName+'.csv')
+    D,card= loadSupervisedData('./data/'+dataName+'.csv')
 
     print(str(card)+'\n'+str(D))
 

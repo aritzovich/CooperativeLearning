@@ -103,13 +103,9 @@ class Stats(object):
         stats= Stats(self.n,self.card,self.cardY)
         stats.initCounts(self.U,self.V)
         for V in self.V:
-            stats.M0v[V]=self.M0v[V].copy()
-            stats.M1v[V] = self.M0v[V].copy()
-            stats.M2v[V] = self.M0v[V].copy()
+            stats.Nv[V]=self.Nv[V].copy()
         for U in self.U:
-            stats.M0[U]=self.M0[U].copy()
-            stats.M1[U]=self.M1[U].copy()
-            stats.M2[U]=self.M2[U].copy()
+            stats.Nu[U]=self.Nu[U].copy()
 
         return stats
 
