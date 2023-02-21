@@ -260,11 +260,16 @@ class IBC(object):
         else:
             return np.sum(1 - self.getClassProbs(X)[range(m), Y])/m
 
-    def condLogLikelihood(self, X, Y):
+    def condLogLikelihood(self, X, Y, normalize= True):
 
         m,n= X.shape
         pY= self.getClassProbs(X)
-        return np.sum(np.log([pY[i,Y[i]] for i in range(m)]))
+        minProb= 10**-6
+        CLL= np.sum(np.log([np.max((pY[i,Y[i]],minProb)) for i in range(m)]))/m
+        if normalize:
+            return CLL/m
+        else:
+            return CLL
 
 
 
