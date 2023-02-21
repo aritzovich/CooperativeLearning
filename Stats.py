@@ -126,11 +126,11 @@ class Stats(object):
         :return:
         '''
 
-        if bool(self.M0v):
-            return np.sum(next(iter(self.M0v.values())))
+        if bool(self.Nv):
+            return np.sum(next(iter(self.Nv.values())))
 
-        if bool(self.M0u):
-            return np.sum(next(iter(self.M0u.values())))
+        if bool(self.Nu):
+            return np.sum(next(iter(self.Nu.values())))
 
         return 0
 
