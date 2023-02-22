@@ -77,8 +77,12 @@ class Stats(object):
                                         np.prod([self.card[s] for s in S]) * self.cardY)
 
         else:
-            self.Nu = {S: np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (
-                                np.prod([self.card[s] for s in S]) * self.cardY) for S in self.U}
+            try:
+                self.Nu = {S: np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (
+                                    np.prod([self.card[s] for s in S]) * self.cardY) for S in self.U}
+            except:
+                for S in self.U:
+                    np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (np.prod([self.card[s] for s in S]) * self.cardY)
 
         if V is None:
             for S in self.V:

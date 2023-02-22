@@ -1,16 +1,24 @@
 # This is a sample Python script.
+import time
 
 # Press Mayús+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas
 import sklearn as sk
+
+import IBC
 import Stats as st
 import IBC as ibc
 import ContStats as cst
+from sklearn.manifold import MDS
+from matplotlib import pyplot as plt
+from matplotlib.collections import LineCollection
+import seaborn as sbn
 
-def loadSupervisedData(dataName= 'glass.csv', classInd=None, sep=',', maxDiscVals=5, skipHeader= 1):
+def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDiscVals=5, bins=None):
     '''
     Load a supervised classification data in csv format: each row contains an instance (case), each column corresponds
     to the values of random variable. The values included in each row are separated by a string given by the parameter
@@ -20,17 +28,26 @@ def loadSupervisedData(dataName= 'glass.csv', classInd=None, sep=',', maxDiscVal
     A variable is considered discrete when i) the values are strings, or 2) the number of values it takes is smaller or
     equal to maxDiscVals.
 
+    :param dataName: name of the file containing the data set
+    :param sep: the separator of the CSV. By default ','
+    :param skipHeader: the header lines that are going to be skyped. By default 0
+    :param classInd: index of the class variable. By default (=None) the last variable
+    :param maxDiscVals: a continuous variable is condidered discrete when the number of different values is lower or
+    equal to maxDiscVals
+    :param bins: Decides whether or not to discretize using equal frequency the continuous variables and the number of
+    intervals.  If it is a positive integer represents the number of bins. By default variables are not discretized
+
     :return: the data set np.array(numCases x numVars), and the cardinality of the variables where continuous have
     np.inf cardinality
     '''
 
-    text = np.genfromtxt(dataName, dtype= np.str, delimiter=sep, skip_header= skipHeader)
+    text = np.genfromtxt(dataName, dtype= str, delimiter=sep, skip_header= skipHeader)
     (m, n) = text.shape
     if classInd is None:
         classInd= n-1
 
     # Determine the nature of the variables (categorical or continuous)
-    card = np.zeros(n)
+    card = np.zeros(n,dtype=int)
     for i in range(n):
         if i != classInd:
             vals= np.unique(text[:, i])
@@ -41,25 +58,98 @@ def loadSupervisedData(dataName= 'glass.csv', classInd=None, sep=',', maxDiscVal
                 if len(vals)<= maxDiscVals:
                     card[i] = len(vals)
                 else:
-                    card[i] = np.inf
+                    card[i] = np.iinfo(np.int32).max
             else:
                 if len(vals) <= maxDiscVals:
                     card[i] = len(vals)
                 else:
-                    card[i] = np.inf
+                    card[i] = np.iinfo(np.int32).max
         else:
             card[i]= len(np.unique(text[:,i]))
 
+    if bins is not None:
+        data = np.zeros((m,n),dtype=int)
+    else:
+        data = np.zeros((m,n),dtype=np.float)
 
-    data = np.zeros((m,n))
     for i in range(n):
-        if card[i] is not np.inf:
-            data[:,i] = np.unique(text[:, i], return_inverse=True)[1]
-        else:
+        if card[i]== np.iinfo(int).max:
             data[:,i] = np.array([np.float(x) for x in text[:, i]])
+        else:
+            data[:,i] = np.unique(text[:, i], return_inverse=True)[1]
 
+
+    if bins is not None:
+        #Discretize continuous data using equal frequency
+        for i in range(n):
+            if card[i]== np.iinfo(np.int32).max:
+                ordered = np.sort(data[:,i])
+                cut = [ordered[int((j + 1) * m / bins) - 1] for j in range(bins)]
+                cut[bins - 1] = ordered[m - 1]
+                for j in range(m):
+                    for k in range(bins):
+                        if data[j,i] <= cut[k]:
+                            break
+                    data[j,i] = k
+
+                card[i]= bins
 
     return data,card
+
+
+
+def TM_VS_DEF(dataName= 'iris', numIter= 10, num_rep=100):
+
+    D,card= loadSupervisedData(dataName= './data/'+dataName+'.csv',skipHeader=1, bins=3)
+    n= len(card)-1
+    cardY= card[-1]
+    card= card[:-1]
+    m= D.shape[0]
+    X= D[:,:-1]
+    Y= D[:,-1]
+
+    df= pandas.DataFrame(columns=['seed','data','$m$','method',"n_iter", 'score', 'value'])
+
+    for seed in range(num_rep):
+        np.random.seed(seed)
+        D = D[np.random.permutation(m),:]
+        for size in [25, 50, 100, 140]:
+            X = D[:size, :-1]
+            Y = D[:size, -1]
+
+            nb= IBC.getNaiveBayesStruct(n)
+
+            TM= ibc.IBC(card,cardY)
+            TM.setBNstruct(nb)
+            start= time.localtime()
+            CLL= TM.learnCondMaxLikelihood(X= X, Y= Y, max_iter= numIter)
+            for i in range(len(CLL)):
+                df.loc[len(df)]= [seed, dataName, size, 'TM', i, 'CLL', CLL[i]]
+            for i in range(len(CLL),numIter):
+                df.loc[len(df)]= [seed, dataName, size, 'TM', i, 'CLL', CLL[-1]]
+
+            DEF= ibc.IBC(card,cardY)
+            DEF.setBNstruct(nb)
+            CLL= DEF.learnDEF(X= X, Y= Y, max_iter= numIter*size,seed=seed)
+            for i in range(len(CLL)):
+                df.loc[len(df)]= [seed, dataName, size, 'DEF', i, 'CLL', CLL[i]]
+            for i in range(len(CLL),numIter):
+                df.loc[len(df)]= [seed, dataName, size, 'TM', i, 'CLL', CLL[-1]]
+
+
+    # Plot the results
+    color = 'method'
+    style= '$m$'
+    num_colors = len(df[color].drop_duplicates().values)
+    palette = sbn.color_palette("husl", num_colors)
+
+    fig, ax = plt.subplots(1)
+    sbn.lineplot(data=df, x='n_iter', y='value', style=style, hue=color
+                 , palette=palette, hue_order=['TM', 'DEF']).set_title(dataName)
+    #ax.set_xscale('log')
+    plt.savefig(dataName + '.pdf', bbox_inches='tight')
+    plt.show()
+
 
 
 
@@ -112,9 +202,7 @@ def pruebas(structs= ["NB"], domain= "ParSum", ms=[500],ns=[10],seed= 1, r= 2):
     plt.show()
 
 
-from sklearn.manifold import MDS
-from matplotlib import pyplot as plt
-from matplotlib.collections import LineCollection
+
 def TMevolution(n= 10, m=100, r= 2, seed= 0):
 
     np.random.seed(seed)
@@ -138,35 +226,6 @@ def TMevolution(n= 10, m=100, r= 2, seed= 0):
     stats0= h.stats.emptyCopy()
     stats0.maximumLikelihood(D[:,:-1],D[:,-1])
     (CLL,stats)=  h.learnCondMaxLikelihood(D[:,:-1],D[:,-1],esz=0.1,max_iter=10,trace=True)
-    n2= len(CLL2)
-    CLL= CLL+ CLL2
-
-    #
-
-    M= np.row_stack([stat.serialize() for stat in stats])
-
-
-    # Find columns that are linear combinations of other columns
-    '''
-    R= np.linalg.qr(M)[1]
-    np.sum(np.abs(np.linalg.qr(M)[1]), axis=0) aprox 0
-    '''
-    embedding = MDS(n_components=2)
-    M_2d = embedding.fit_transform(M)
-    color= (CLL-np.min(CLL))/(np.max(CLL)-np.min(CLL))
-    x = M_2d[:, 0]
-    y = M_2d[:, 1]
-    c = color
-    plt.scatter(x, y, s=200, c=c)
-    plt.show()
-
-    x = M_2d[:n1,0]
-    y = M_2d[:n1, 1]
-    plt.plot(x,y,'.-')
-    x = M_2d[n1:,0]
-    y = M_2d[n1:, 1]
-    plt.plot(x,y,'.-')
-    plt.show()
 
 
 def boostrap():
@@ -262,7 +321,9 @@ def generateData(domain= "ParSum", m=10, n=5, r= 4):
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    pruevas_contStat()
+    TM_VS_DEF()
+#    pruevas_contStat()
+
 #    pruebas()
 #    TMevolution(n=10, m=100, r=2, seed=0)
 

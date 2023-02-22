@@ -115,10 +115,10 @@ class IBC(object):
 
         return e
 
-    def initStats(self):
+    def initStats(self, esz= 0.1):
 
         self.stats= st.Stats(self.n, self.card, self.cardY)
-        self.stats.initCounts(self.expU.keys(),self.expV.keys())
+        self.stats.initCounts(self.expU.keys(), self.expV.keys(), esz= esz)
 
 
     def setStats(self,stats):
@@ -152,7 +152,7 @@ class IBC(object):
         self.initStats()
         self.stats.maximumLikelihood(X, Y, esz=esz)
 
-    def learnCondMaxLikelihood(self, X, Y, stats= None, stats0= None, max_iter= 10, esz= 0, lr= 1.0, trace= False):
+    def learnCondMaxLikelihood(self, X, Y, stats= None, stats0= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False):
         '''
         The TM algorithm
 
@@ -168,8 +168,8 @@ class IBC(object):
         :param max_iter: maximum iterations of
         :param esz: equivalent sample size
         :param trace: if Trace returns a summary of the execution of the TM False by default.
-        :return: if trace then returns the list of the CLL np.array(double)
-        and the corresponding list of Stats list(Stats)
+        :return: the list of the normalized CLL np.array(double). if trace then returns additionally the corresponding
+        list of Stats list(Stats)
         '''
 
         m,n= X.shape
@@ -202,7 +202,8 @@ class IBC(object):
             pY= self.getClassProbs(X)
 
             # Compute and store de cond. log. likel.
-            evolCLL.append(np.sum(np.log(pY[range(m),Y])))
+            minProb = 10 ** -6
+            evolCLL.append(np.sum(np.log([np.max((pY[i, Y[i]], minProb)) for i in range(m)])) / m)
             if trace:
                 evolStats.append(self.stats.copy())
 
@@ -213,15 +214,109 @@ class IBC(object):
                     # undo the update of the statistics
                     N= self.stats.getSampleSize()
                     N_MWL= MWL.getSampleSize()
-                    self.stats.add(MWL, lr= lr*N/N_MWL)
+                    self.stats.add(MWL, prop= lr*N/N_MWL)
                     N_0= stats0.getSampleSize()
-                    self.stats.subtract(stats0, lr= lr*N/N_0)
+                    self.stats.subtract(stats0, prop= lr*N/N_0)
 
                     del evolCLL[-1]
                     if trace:
                         del evolStats[-1]
 
             MWL= self.stats.update(X,pY,stats0,lr= lr, esz= esz)
+
+        if trace:
+            return (np.array(evolCLL), evolStats)
+        else:
+            return np.array(evolCLL)
+
+
+    def learnDEF(self, X, Y, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
+        '''
+        The discriminative frequency estimate
+
+          u^t+1= u^t - lr · (E^t-u_0)
+
+        where u^0 are the initial statistics, E^t is the maximum likelihood statistics obtained from X,p(Y|X,u^t)
+        and u_0 are the reference statistics
+
+        :param X:
+        :param Y:
+        :param stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
+        :param max_iter: maximum iterations of
+        :param esz: equivalent sample size
+        :param trace: if Trace returns a summary of the execution of the DEF. False by default.
+        :return: the list of the CLL np.array(double). If trace==True then also the corresponding list of Stats list(Stats)
+        '''
+
+        m,n= X.shape
+
+        if seed is not None:
+            np.random.seed(seed)
+
+
+        if stats is not None:
+            # The initial statistics
+            self.stats= stats.copy()
+            n_iter = 0
+        else:
+            # The statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
+            self.learnMaxLikelihood(X, Y, esz=esz)
+            n_iter= m
+
+
+        cont= True
+
+        evolCLL = list()
+        if trace:
+            evolStats= list()
+
+        randOrder = np.random.permutation(m)
+        while(cont and n_iter<= max_iter):
+            cont= True
+
+            # Check if all the data has been used
+            if n_iter % m == 0:
+                randOrder= np.random.permutation(m)
+
+                # Compute and store de cond. log. likel. after visiting the whole data
+                pY = self.getClassProbs(X)
+                minProb= 10**-6
+                evolCLL.append(np.sum(np.log([np.max((pY[i,Y[i]], minProb)) for i in range(m)]))/m)
+                if trace:
+                    evolStats.append(self.stats.copy())
+
+                if len(evolCLL)>1:
+                    if evolCLL[-1]<= evolCLL[-2]:
+                        cont= False
+                        #//TODO undo the update of the statistics
+
+                        del evolCLL[-1]
+                        if trace:
+                            del evolStats[-1]
+
+                # Check monotone increasing condition of CLL
+
+
+            # index of the instance in the data
+            ind= randOrder[n_iter % m]
+
+            # Compute the conditional probability
+            pY= self.getClassProb(X[ind,:])
+
+            # The loss
+            L= np.array([1-pY[y] if y== Y[ind] else 0-pY[y] for y in range(self.cardY)])
+
+            # Update
+            for U in self.stats.U:
+                self.stats.Nu[U][tuple(X[ind, U])]+= L
+
+            # Maximum likelihood estimate for nonsupervised statistics
+            #if n_iter/m<1:
+            #    for V in self.stats.V:
+            #        self.stats.Nv[V][tuple(X[ind, V])]+= 1
+
+            n_iter+= 1
+
 
         if trace:
             return (np.array(evolCLL), evolStats)
@@ -260,7 +355,7 @@ class IBC(object):
         else:
             return np.sum(1 - self.getClassProbs(X)[range(m), Y])/m
 
-    def condLogLikelihood(self, X, Y, normalize= True):
+    def CLL(self, X, Y, normalize= True):
 
         m,n= X.shape
         pY= self.getClassProbs(X)
@@ -270,6 +365,81 @@ class IBC(object):
             return CLL/m
         else:
             return CLL
+
+
+
+# TOOLS FOR WORKING WITH THE STRUCTURE
+
+def getNaiveBayesStruct(n):
+    '''
+    Creates the naive Bayes structure
+
+    :param n: number of variables
+    :return:
+    '''
+    return [[n] for i in range(n)] + [[]]
+
+def getTANStruct(n, ancOrd= None, seed= None):
+    '''
+    Creates a random tree-augmented naive Bayes structure. The class has index n
+
+    :param n: number of variables
+    :param ancOrd: ancestral order of the variables. By default is generated at random
+    :param seed: random seed. By default None
+    :return:
+    '''
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    if ancOrd is None:
+        andOrd= np.random.permutation(n)
+
+    W= np.random.random((n,n))
+    T,w= maximumWeigtedTree(W)
+    for i in range(n):
+        # Add the class as the parent of each variable
+        T[i].append(n)
+
+    # The class has no parent
+    T.append([])
+
+
+def maximumWeigtedTree(W):
+    '''
+    A symmetric weight matrix W np.array(n x n)
+
+    The method implements Prim's algorithm for finding a maximum weighted tree
+
+    Inefficient implementation: O(n^3) -- related to tetrahedral numbers, n(n+1)*(n+2)/6)
+    By using the sort operator: O(n^2 log n)
+
+    Return the maximum weighted tree over the n indices. The tree is directed with 0 index
+    as the root.
+    '''
+    (n,n)= W.shape
+
+    remain = [i for i in range(1,n)]
+    added = [0]
+    Pa= [list() for i in range(n)]
+    added_weight= 0
+    while (len(added) < n):
+        maximum = -np.inf
+        a = -1
+        b = -1
+        for i in added:
+            for j in remain:
+                if maximum < W[i,j]:
+                    maximum = W[i,j]
+                    a = i
+                    b = j
+
+        added_weight+= maximum
+        Pa[b].append(a)
+        added.append(b)
+        remain.remove(b)
+
+    return Pa,added_weight
 
 
 
