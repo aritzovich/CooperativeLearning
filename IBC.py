@@ -202,8 +202,9 @@ class IBC(object):
             pY= self.getClassProbs(X)
 
             # Compute and store de cond. log. likel.
-            minProb = 10 ** -6
-            evolCLL.append(np.sum(np.log([np.max((pY[i, Y[i]], minProb)) for i in range(m)])) / m)
+            #minProb = 10 ** -6
+            #evolCLL.append(np.sum(np.log([np.max((pY[i, Y[i]], minProb)) for i in range(m)])) / m)
+            evolCLL.append(np.sum(np.log(pY[:, Y])))
             if trace:
                 evolStats.append(self.stats.copy())
 
@@ -280,8 +281,9 @@ class IBC(object):
 
                 # Compute and store de cond. log. likel. after visiting the whole data
                 pY = self.getClassProbs(X)
-                minProb= 10**-6
-                evolCLL.append(np.sum(np.log([np.max((pY[i,Y[i]], minProb)) for i in range(m)]))/m)
+                #minProb= 10**-6
+                #evolCLL.append(np.sum(np.log([np.max((pY[i,Y[i]], minProb)) for i in range(m)]))/m)
+                evolCLL.append(np.sum(np.log(pY[:, Y])))
                 if trace:
                     evolStats.append(self.stats.copy())
 
