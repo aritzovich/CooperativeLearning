@@ -4,19 +4,20 @@ from network.Server import Server
 
 class User(Client, Server): 
 
-    def __init__(self, children, parents, identifier, classif_structure, data, data_domain=None):
-        super(User, self).__init__(identifier, classif_structure, data, data_domain)  # For the Client
+    def __init__(self, children, parents, identifier, classif_structure, data, card_x, card_y, data_domain=None):
+        super(User, self).__init__(identifier, classif_structure, data, card_x, card_y, data_domain)  # For the Client
         self.children = children
         self.parents = parents
 
-    def compute(self, global_time, policy):
+    def compute(self, global_time, policy, global_train_data, test_data):
         """
         Performs the corresponding actions in a user level.
         :param global_time: Global time to update the time of the computed statistics
         :param policy: The user defined policy. If policy = info, the expectation is always made maximizing information
         if policy = recent it computes the expectation with the most recent statistics
-        :return: Two lists containing the old statistics (stats_old) and the newest statistics (stats_new). No statistics from
-        stats_old have been used to compute statistics of stats_new.
+        :param global_train_data: The entire Training data set that has been split among the users
+        :param test_data: A Test dataset to compute generalization error
+        :return: A dictionary containing CLL_local, CLL_global and CLL_test
         """
         stats_old, stats_new = None, None
         if len(self.stats_new) > 1:
@@ -34,44 +35,51 @@ class User(Client, Server):
             stats_old = self.stats_old[0]
         elif inside_theta2 and inside_theta1:
             # Decide depending on policy
-            if policy == "info":
+            if policy == "info":  # Selects the one with max info
                 if len(self.stats_new[0]) > len(self.stats_old[0]):
                     stats_old = self.stats_new[0]
                 else:
                     stats_old = self.stats_old[0]
-            elif policy == "recent":
+            elif policy == "recent":  # Selects the most recent one
                 creation_time_theta1 = [s[2] for s in self.stats_new[0] if s[1] == self.id]
                 creation_time_theta2 = [s[2] for s in self.stats_old[0] if s[1] == self.id]
                 if creation_time_theta1 > creation_time_theta2:
                     stats_old = self.stats_new[0]
                 else:
                     stats_old = self.stats_old[0]
+            elif policy == "condloglik":  # Prefers conditional log likelihood
+                u_g_old = self.stats_old[0][0].copy()
+                for k in range(1, len(self.stats_old[0])):
+                    u_g_old.add(self.stats_old[0][k][0])
+                self.classifier.setStats(u_g_old)
+                error_old = self.classifier.condLogLikelihood(self.data[:, :-1], self.data[:, -1])
+
+                u_g_new = self.stats_new[0][0].copy()
+                for k in range(1, len(self.stats_new[0])):
+                    u_g_new.add(self.stats_old[0][k][0])
+                self.classifier.setStats(u_g_new)
+                error_new = self.classifier.condLogLikelihood(self.data[:, :-1], self.data[:, -1])
+                if error_new > error_old:
+                    stats_old = self.stats_old[0]
+
             stats_new = self.aggregate(self.stats_new[0], self.expectation(global_time, stats_old))
             stats_old = self.stats_new[0]
         else:
-            print(f"Situation not considered (NODEID {self.id}):\n\tTheta2 = {self.stats_old}\n\t Theta1 = {self.stats_new}")
+            print(f"Situation not considered (NODEID {self.id}):\n\tStats_old = {self.stats_old}"
+                  f"\n\t Stats_new = {self.stats_new}")
 
         for ch in self.children:
             ch.enqueue_stats(stats_old, stats_new)
 
-        self.stats_new = []
-        self.stats_old = []
-        return stats_old, stats_new
+        self.stats_new = [{}]
+        self.stats_old = [{}]
 
-    # def is_statistic_inside(self):
-    #     """
-    #     Checks whether the user statistic is inside stats_old and stats_new
-    #     :return: A tuple with two boolean values corresponding to is inside stats_new and is inside stats_old respectively
-    #     """
-    #     inside_theta1 = False
-    #     inside_theta2 = False
-    #     for s in self.stats_new[0]:
-    #         if s[1] == self.id:
-    #             inside_theta1 = True
-    #     for s in self.stats_old[0]:
-    #         if s[1] == self.id:
-    #             inside_theta2 = True
-    #     return inside_theta1, inside_theta2
+        # Compute the CLL
+        CLL = {'local': self.classifier.CLL(self.data[:, :-1], self.data[:, -1]),
+               'global': self.classifier.CLL(global_train_data[:, :-1], global_train_data[:, -1]),
+               'test': self.classifier.CLL(test_data[:, :-1], test_data[:, -1])}
+
+        return CLL
 
     def enqueue_stats(self, stats_old, stats_new):
         """

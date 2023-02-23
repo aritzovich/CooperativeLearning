@@ -1,4 +1,6 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDiscVals=5, bins=None):
     '''
@@ -78,3 +80,19 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
 
     return data,card
 
+
+def missing_value_imputation(df, imputation_type="mode"):
+    m, n = df.shape
+    for c in range(n):
+        mode = np.df[:, c]
+        ix = df[:, c] == df[:, c]
+
+def plot_results(df, theme='darkgrid', export_path=None):
+    sns.set_theme(style=theme)
+    sns.lineplot(x="time", y="score",
+                 hue="score_name", style="BN_Structure",
+                 data=df)
+    if export_path:
+        plt.savefig(export_path, format='pdf')
+    else:
+        plt.show()

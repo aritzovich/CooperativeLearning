@@ -17,8 +17,8 @@ def show_graph(adjacency_matrix):
 def flatten(xs):
     """
     A generic function to flatten a list of lists
-    :param xs: the list of lists to be flatten
-    :return: the flatten list
+    :param xs: the list of lists to be flattened
+    :return: the flattened list
     """
     for x in xs:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
@@ -73,3 +73,4 @@ def plotParameters3D(line_id, x, y, z, score, savePath=None):
         plt.savefig(savePath, format="pdf")
     else:
         plt.show()
+

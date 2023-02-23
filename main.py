@@ -148,7 +148,7 @@ def TMevolution(n= 10, m=100, r= 2, seed= 0):
     D = generateData("ParSum", m, n+1, r= r)
     stats0= h.stats.emptyCopy()
     stats0.maximumLikelihood(D[:,:-1],D[:,-1])
-    (CLL,stats)=  h.learnCondMaxLikelihood(D[:,:-1],D[:,-1],esz=0.1,max_iter=10,trace=True)
+    (CLL2,stats)=  h.learnCondMaxLikelihood(D[:,:-1],D[:,-1],esz=0.1,max_iter=10,trace=True)
 
 
 def boostrap():

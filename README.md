@@ -15,7 +15,8 @@ Add Description here
 - `--policy`: Either `info` or `recent` 
     - `info`: Selects the list of statistics that holds _more information_ to compute the expectation.
     - `recent`: Selects the _most recent_ list of statistics to compute the expectation.
-- `--data`: Path to the dataset in _csv_ format. If not supplied, a dataset is generated with `--n_points`, `--n_variables` and `--dimension`.
+- `--train_data`: Path to the train subset of the dataset in _csv_ format. If not supplied, a dataset is generated with `--n_points`, `--n_variables` and `--dimension`.
+- `--test_data`: Path to the test subset of the dataset in _csv_ format. If not supplied, a dataset is generated with `--n_points`, `--n_variables` and `--dimension`.
 - `--n_points`: The number of instances to be generated in the dataset.
 - `--n_variables`: Number of variables for the dataset.
 - `--dimension`: Cardinality of the categorical variables.
