@@ -349,13 +349,45 @@ class Stats(object):
 
         return np.concatenate([Nu.flatten() for Nu in self.Nu.values()])
 
-    def _checkConsistency(self):
+    def checkConsistency(self):
         '''
         It checks the consistency of the statistics under marginalization
         :return:
         '''
 
-        return True
+        consistent= True
+
+        # All the count have to be greater than zero
+        for U in self.U:
+            if np.any(self.Nu[U]<0):
+                print("INCONSISTENT Nu stats: negative counts")
+                #//TODO: eliminar los valores negativos y reescalar (son consistentes los estadisticos)
+                #sum= np.reshape(np.sum(self.Nu[U],axis=-1),(self.Nu[U].shape[-1],1)
+                #self.Nu[U][self.Nu[U] < 0]= 0
+                #sum_new= np.reshape(np.sum(self.Nu[U],axis=-1),(self.Nu[U].shape[-1],1)
+                #self.Nu[U]*= (sum/sum_new)
+                consistent= False
+                break
+
+        for V in self.V:
+            if np.any(self.Nv[V]<0):
+                print("INCONSISTENT Nv stats: negative counts")
+                consistent= False
+                break
+
+        # All the counts have to sum the same
+        if self.U:
+            sum= 0
+            for U in self.U:
+                if sum> 0:
+                    if not np.isclose(np.sum(self.Nu[U]),sum):
+                        print("INCONSISTENT Nu stats: different sums")
+                        consistent= False
+                        break
+                else:
+                    sum= np.sum(self.Nu[U])
+
+        return consistent
 
 
 

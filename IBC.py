@@ -198,13 +198,16 @@ class IBC(object):
             cont= True
             n_iter+= 1
 
+            #check consistency of the statistics
+            self.stats.checkConsistency()
+
             # Compute the conditional probability
             pY= self.getClassProbs(X)
 
             # Compute and store de cond. log. likel.
-            #minProb = 10 ** -6
-            #evolCLL.append(np.sum(np.log([np.max((pY[i, Y[i]], minProb)) for i in range(m)])) / m)
-            evolCLL.append(np.sum(np.log(pY[:, Y])))
+            minProb = 10 ** -6
+            evolCLL.append(np.sum(np.log([np.max((pY[i, Y[i]], minProb)) for i in range(m)])) / m)
+            #evolCLL.append(np.sum(np.log(pY[:, Y])))
             if trace:
                 evolStats.append(self.stats.copy())
 
@@ -277,13 +280,13 @@ class IBC(object):
 
             # Check if all the data has been used
             if n_iter % m == 0:
+                # check consistency of the statistics
+                self.stats.checkConsistency()
+
                 randOrder= np.random.permutation(m)
 
                 # Compute and store de cond. log. likel. after visiting the whole data
-                pY = self.getClassProbs(X)
-                #minProb= 10**-6
-                #evolCLL.append(np.sum(np.log([np.max((pY[i,Y[i]], minProb)) for i in range(m)]))/m)
-                evolCLL.append(np.sum(np.log(pY[:, Y])))
+                evolCLL.append(self.CLL(X,Y))
                 if trace:
                     evolStats.append(self.stats.copy())
 
@@ -325,6 +328,96 @@ class IBC(object):
         else:
             return np.array(evolCLL)
 
+    def stochasticTM(self, X, Y, size= 1, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
+        '''
+        Mini-batch sctochastic TM.
+
+        Mini-batch version of the TM algorithm that updates the statistics using randomly selected batches of data
+
+        :param X:
+        :param Y:
+        :param stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
+        :param max_iter: maximum iterations of
+        :param esz: equivalent sample size
+        :param trace: if Trace returns a summary of the execution of the DEF. False by default.
+        :return: the list of the CLL np.array(double). If trace==True then also the corresponding list of Stats list(Stats)
+        '''
+
+        m,n= X.shape
+
+        if seed is not None:
+            np.random.seed(seed)
+
+
+        if stats is not None:
+            # The initial statistics
+            self.stats= stats.copy()
+            n_iter = 0
+        else:
+            # The statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
+            self.learnMaxLikelihood(X, Y, esz=esz)
+            n_iter= int(m/size)
+
+
+        cont= True
+
+        evolCLL = list()
+        if trace:
+            evolStats= list()
+
+        inds= [i for i in range(m)]
+        randOrder = np.random.permutation(m)
+        while(cont and n_iter<= max_iter):
+            cont= True
+
+            # check if at least m instances have been used: size instances por each iteration
+            if (n_iter*size % m) < size:
+                randOrder= np.random.permutation(m)
+
+                # check consistency of the statistics
+                self.stats.checkConsistency()
+
+                # Compute and store de cond. log. likel. after visiting the whole data
+                evolCLL.append(self.CLL(X,Y))
+                #evolCLL.append(np.sum(np.log(pY[:, Y])))
+                if trace:
+                    evolStats.append(self.stats.copy())
+
+                if len(evolCLL)>1:
+                    if evolCLL[-1]<= evolCLL[-2]:
+                        cont= False
+                        #//TODO undo the update of the statistics
+
+                        del evolCLL[-1]
+                        if trace:
+                            del evolStats[-1]
+
+                # Check monotone increasing condition of CLL
+
+
+            # random sampling without replacement of minibatch
+            # mb= np.random.choice(inds,size, replace= False)
+            inds= [i for i in range(m)]
+            mb = [i for i in range(n_iter * size % m,
+                                   (n_iter + 1) * size % m if (n_iter + 1) * size % m > n_iter * size % m else m)] \
+                 + [i for i in range(0 if (n_iter + 1) * size % m > n_iter * size % m else (n_iter + 1) * size % m)]
+
+            # Compute the conditional probability
+            pY= self.getClassProbs(X[mb,:])
+
+            # Update
+            for i in range(size):
+                delta = np.array([1 - pY[i, y] if y == Y[mb[i]] else 0 - pY[i, y] for y in range(self.cardY)])
+                for U in self.stats.U:
+                    self.stats.Nu[U][tuple(X[mb[i], U])]+= delta
+
+            n_iter+= 1
+
+        if trace:
+            return (np.array(evolCLL), evolStats)
+        else:
+            return np.array(evolCLL)
+
     def getClassProbs(self,X):
         m,n= X.shape
         py= np.zeros(shape=(m,self.cardY))
@@ -335,6 +428,7 @@ class IBC(object):
 
     def getClassProb(self,x):
         '''
+        TODO arreglar lo de las probs negativas y mayores que 1: tiene que ver con TM, stochasticTM y DEF
 
         :param xy: the instance
         :return:
@@ -361,8 +455,9 @@ class IBC(object):
 
         m,n= X.shape
         pY= self.getClassProbs(X)
+        # avoid zero probabilities
         minProb= 10**-6
-        CLL= np.sum(np.log([np.max((pY[i,Y[i]],minProb)) for i in range(m)]))/m
+        CLL= np.sum(np.log([np.max((pY[i,Y[i]],minProb)) for i in range(m)]))
         if normalize:
             return CLL/m
         else:

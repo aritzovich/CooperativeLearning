@@ -21,7 +21,7 @@ import Utils as utl
 
 
 
-def TM_VS_DEF(dataName= 'iris', numIter= 10, num_rep=100):
+def TM_VS_DEF(dataName= 'iris', sizes=[20,35,75,140], numIter= 10, num_rep=100):
 
     D,card= utl.loadSupervisedData(dataName= './data/'+dataName+'.csv',skipHeader=1, bins=3)
     n= len(card)-1
@@ -36,28 +36,43 @@ def TM_VS_DEF(dataName= 'iris', numIter= 10, num_rep=100):
     for seed in range(num_rep):
         np.random.seed(seed)
         D = D[np.random.permutation(m),:]
-        for size in [25, 50, 100, 140]:
+
+        for size in sizes:
             X = D[:size, :-1]
             Y = D[:size, -1]
 
             nb= IBC.getNaiveBayesStruct(n)
 
-            TM= ibc.IBC(card,cardY)
-            TM.setBNstruct(nb)
+            h= ibc.IBC(card,cardY)
+            h.setBNstruct(nb)
             start= time.localtime()
-            CLL= TM.learnCondMaxLikelihood(X= X, Y= Y, max_iter= numIter)
+
+            CLL= h.learnCondMaxLikelihood(X= X, Y= Y, max_iter= numIter)
             for i in range(len(CLL)):
                 df.loc[len(df)]= [seed, dataName, size, 'TM', i, 'CLL', CLL[i]]
             for i in range(len(CLL),numIter):
                 df.loc[len(df)]= [seed, dataName, size, 'TM', i, 'CLL', CLL[-1]]
 
-            DEF= ibc.IBC(card,cardY)
-            DEF.setBNstruct(nb)
-            CLL= DEF.learnDEF(X= X, Y= Y, max_iter= numIter*size,seed=seed)
+
+            CLL= h.learnDEF(X= X, Y= Y, max_iter= numIter*size,seed=seed)
             for i in range(len(CLL)):
                 df.loc[len(df)]= [seed, dataName, size, 'DEF', i, 'CLL', CLL[i]]
             for i in range(len(CLL),numIter):
-                df.loc[len(df)]= [seed, dataName, size, 'TM', i, 'CLL', CLL[-1]]
+                df.loc[len(df)]= [seed, dataName, size, 'DEF', i, 'CLL', CLL[-1]]
+
+            mb_size= 5
+            CLL= h.stochasticTM(X= X, Y= Y, size= mb_size, max_iter= int(numIter*size/mb_size),seed=seed)
+            for i in range(len(CLL)):
+                df.loc[len(df)]= [seed, dataName, size, 'STM_'+str(mb_size), i, 'CLL', CLL[i]]
+            for i in range(len(CLL),numIter):
+                df.loc[len(df)]= [seed, dataName, size, 'STM_'+str(mb_size), i, 'CLL', CLL[-1]]
+
+            mb_size= 10
+            CLL= h.stochasticTM(X= X, Y= Y, size= mb_size, max_iter= int(numIter*size/mb_size),seed=seed)
+            for i in range(len(CLL)):
+                df.loc[len(df)]= [seed, dataName, size, 'STM_'+str(mb_size), i, 'CLL', CLL[i]]
+            for i in range(len(CLL),numIter):
+                df.loc[len(df)]= [seed, dataName, size, 'STM_'+str(mb_size), i, 'CLL', CLL[-1]]
 
 
     # Plot the results
@@ -66,9 +81,13 @@ def TM_VS_DEF(dataName= 'iris', numIter= 10, num_rep=100):
     num_colors = len(df[color].drop_duplicates().values)
     palette = sbn.color_palette("husl", num_colors)
 
+    #for size in sizes:
+    #    aux= df[df['$m$']== size]
+    aux=df
     fig, ax = plt.subplots(1)
-    sbn.lineplot(data=df, x='n_iter', y='value', style=style, hue=color
-                 , palette=palette, hue_order=['TM', 'DEF']).set_title(dataName)
+    sbn.lineplot(data=aux, x='n_iter', y='value', style=style, hue=color
+                 , palette=palette).set_title(dataName)
+    #                 , palette=palette, hue_order=['TM', 'STM', 'DEF']).set_title(dataName)
     #ax.set_xscale('log')
     plt.savefig(dataName + '.pdf', bbox_inches='tight')
     plt.show()
