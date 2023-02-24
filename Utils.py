@@ -1,4 +1,6 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDiscVals=5, bins=None):
     '''
@@ -78,3 +80,39 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
 
     return data,card
 
+
+def missing_value_imputation(df, imputation_type="mode", max_distinct_values=5):
+    """
+    Imputes the missing values of a dataset with the specified imputation method
+    :param df: The dataframe that is going to be filled
+    :param imputation_type: The imputation method. Currently only 'mode'
+    :param max_distinct_values: Max distinct values that a feature can take so that it can be considered as categorical
+    :return: The filled dataframe
+    """
+    m, n = df.shape
+    for c in range(n):
+        unique_vals = np.unique(df[:, c])
+        n_distinct_values = len(unique_vals)
+        ix = df[:, c] == df[:, c]
+        if np.sum(ix) > 0:  # If there are missing values in this column
+            if n_distinct_values > max_distinct_values:
+                # It is considered continuous
+                mean = np.nanmean(np.df[:, c])
+                df[ix, c] = mean
+            else:
+                # It is considered categorical
+                counts = [np.nansum(df[:, c] == val) for val in unique_vals]
+                mode = unique_vals[np.argmax(counts)]
+                df[ix, c] = mode
+    return df
+
+
+def plot_results(df, theme='darkgrid', export_path=None):
+    sns.set_theme(style=theme)
+    sns.lineplot(x="time", y="score",
+                 hue="score_name", style="BN_Structure",
+                 data=df)
+    if export_path:
+        plt.savefig(export_path, format='pdf')
+    else:
+        plt.show()
