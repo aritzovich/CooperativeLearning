@@ -234,14 +234,17 @@ class IBC(object):
             return np.array(evolCLL)
 
 
-    def learnDEF(self, X, Y, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
+    def stochasticTM(self, X, Y, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
         '''
-        The discriminative frequency estimate
+        The stochastic TM: Each iteration consider a single instance, and the statistics are updated at every iteration
 
           u^t+1= u^t - lr · (E^t-u_0)
 
         where u^0 are the initial statistics, E^t is the maximum likelihood statistics obtained from X,p(Y|X,u^t)
         and u_0 are the reference statistics
+
+        It has some similarities with Disciminative Frequency Estimate of "Su et al. (2008). Discriminative Parameter Learning
+        for Bayesian Networks".
 
         :param X:
         :param Y:
@@ -328,9 +331,9 @@ class IBC(object):
         else:
             return np.array(evolCLL)
 
-    def stochasticTM(self, X, Y, size= 1, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
+    def minibatchTM(self, X, Y, size= 1, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
         '''
-        Mini-batch sctochastic TM.
+        Mini-batch stochastic TM.
 
         Mini-batch version of the TM algorithm that updates the statistics using randomly selected batches of data
 
@@ -418,15 +421,23 @@ class IBC(object):
         else:
             return np.array(evolCLL)
 
-    def getClassProbs(self,X):
+    def getClassProbs(self,X, stats= None):
+
+        if stats:
+            IBC_stats= self.stats
+            self.stats= stats
+
         m,n= X.shape
         py= np.zeros(shape=(m,self.cardY))
         for i in range(m):
             py[i,:]= self.getClassProb(X[i,:])
 
+        if stats:
+            self.stats= IBC_stats
+
         return py
 
-    def getClassProb(self,x):
+    def getClassProb(self,x, stats= None):
         '''
         TODO arreglar lo de las probs negativas y mayores que 1: tiene que ver con TM, stochasticTM y DEF
 
@@ -434,35 +445,57 @@ class IBC(object):
         :return:
         '''
 
+        if stats:
+            IBC_stats= self.stats
+            self.stats= stats
+
         py = np.prod(np.row_stack([self.stats.Nu[U][tuple(x[list(U)])] ** self.expU[U] for U in self.expU]),
                      axis=0) * np.prod([self.stats.Nv[V][tuple(x[list(V)])] ** self.expV[V] for V in self.expV])
 
         #[tuple(x[list(U)]) for U in self.expU]
         #[U for U in self.expU]
 
+        if stats:
+            self.stats= IBC_stats
+
         py/= np.sum(py)
         return py
 
-    def error(self, X, Y, deterministic= True):
+    def error(self, X, Y, deterministic= True, stats= None):
+
+        if stats:
+            IBC_stats= self.stats
+            self.stats= stats
 
         m,n= X.shape
+
+        if stats:
+            self.stats= IBC_stats
+
         if deterministic:
             return np.sum(np.argmax(self.getClassProbs(X), axis=1) == Y) / m
         else:
             return np.sum(1 - self.getClassProbs(X)[range(m), Y])/m
 
-    def CLL(self, X, Y, normalize= True):
+    def CLL(self, X, Y, normalize= True, stats= None):
+
+        if stats:
+            IBC_stats= self.stats
+            self.stats= stats
 
         m,n= X.shape
         pY= self.getClassProbs(X)
         # avoid zero probabilities
         minProb= 10**-6
         CLL= np.sum(np.log([np.max((pY[i,Y[i]],minProb)) for i in range(m)]))
-        if normalize:
-            return CLL/m
-        else:
-            return CLL
 
+
+        if stats:
+            self.stats= IBC_stats
+        if normalize:
+            CLL= CLL/m
+
+        CLL
 
 
 # TOOLS FOR WORKING WITH THE STRUCTURE
