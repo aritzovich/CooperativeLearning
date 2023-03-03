@@ -243,8 +243,9 @@ class IBC(object):
         For size= 1, is the stochastic TM. The stochastic TM has some similarities with Disciminative Frequency
         Estimate of "Su et al. (2008). Discriminative Parameter Learning for Bayesian Networks".
 
-        :param X:
-        :param Y:
+        :param X: training instances
+        :param Y: the true class of the instances
+        :param size: the size of the minibatches
         :param stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
         :param max_iter: maximum iterations of
         :param esz: equivalent sample size
@@ -320,8 +321,7 @@ class IBC(object):
 
             # random sampling without replacement of minibatch
             # mb= np.random.choice(inds,size, replace= False)
-            inds= [i for i in range(m)]
-            mb = [i for i in range(n_iter * size % m,
+            mb = [randOrder[i] for i in range(n_iter * size % m,
                                    (n_iter + 1) * size % m if (n_iter + 1) * size % m > n_iter * size % m else m)] \
                  + [i for i in range(0 if (n_iter + 1) * size % m > n_iter * size % m else (n_iter + 1) * size % m)]
 
