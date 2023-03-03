@@ -262,79 +262,88 @@ class IBC(object):
         if stats is not None:
             # The initial statistics
             self.stats= stats.copy()
-            n_iter = 0
         else:
             # The statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
             self.learnMaxLikelihood(X, Y, esz=esz)
-            n_iter= int(m/size)
 
 
-        cont= True
+
+        prevStats= self.stats.copy()
+        prevCLL= self.CLL(X,Y,normalize=True)
 
         evolCLL = list()
         if trace:
-            evolStats= list()
+            evolStats= [prevStats]
+            evolCLL.append(prevCLL)
             # TODO: check if is the correct index (floor, ground, int?)
             prevInd= int(size/m)
         else:
             prevInd= 1
-        prevStats= self.stats.copy()
 
-        inds= [i for i in range(m)]
         randOrder = np.random.permutation(m)
-        while(cont and n_iter<= max_iter):
-            cont= True
 
-            # Compute and store de cond. log. likel. each iteration
-            if trace:
-                evolCLL.append(self.CLL(X, Y))
-                evolStats.append(self.stats.copy())
+        cont= True
+        # Iterative update: number of iterations over the whole dataset
+        for n_iter in range(max_iter* np.ceil(m/size)):
+            if not cont:
+                break
 
-            # check if at least m instances have been used: size instances por each iteration
-            if (n_iter*size % m) < size:
-                randOrder= np.random.permutation(m)
+            # check if at least m instances have been used: "size" number of instances por each iteration
+            if (n_iter % np.ceil(m/size) ==0) and n_iter>0:
+                # Create a new ordering of the instances for the minibatches
+                randOrder = np.random.permutation(m)
 
                 # check consistency of the statistics
                 self.stats.checkConsistency()
-                #TODO: do something when they are not consistent: i) stop the optimization, ii) force consistency
+                # TODO: do something when they are not consistent: i) stop the optimization, ii) force consistency
 
                 # store the cond. log. likel. after visiting all the data
                 if not trace:
-                    evolCLL.append(self.CLL(X,Y))
+                    actCLL = self.CLL(X, Y, normalize=True)
+                    evolCLL.append(actCLL)
+                else:
+                    actCLL = evolCLL[-1]
 
-                if len(evolCLL)>prevInd:
-                    if evolCLL[-1]<= evolCLL[-(1+ prevInd)]:
-                        cont= False
+                if n_iter:
+                    # Stop condition: monotone increasing of CLL
+                    if actCLL< prevCLL:
+                        cont = False
 
-                        self.stats= prevStats
+                        # Restitute previos statistics
+                        self.stats = prevStats
 
-                        del evolCLL[-1]
-                        if trace:
-                            del evolStats[-1]
+                        #
+                        if not trace:
+                            # if not trace, remove the last CLL
+                            del evolCLL[-1]
+                        else:
+                            # it trace, remove the CLLs and Stats since the previos model
+                            for i in range(np.ceil(m / size)):
+                                del evolCLL[-1]
+                                del evolStats[-1]
 
                     else:
                         # Store the stats of the classifier as long as the CLL increases
-                        prevStats= self.stats.copy
+                        prevStats = self.stats.copy
 
-                # Check monotone increasing condition of CLL
-
-
-            # random sampling without replacement of minibatch
+            # Create the minibatch: random sampling without replacement of minibatch
             # mb= np.random.choice(inds,size, replace= False)
-            mb = [randOrder[i] for i in range(n_iter * size % m,
-                                   (n_iter + 1) * size % m if (n_iter + 1) * size % m > n_iter * size % m else m)] \
-                 + [i for i in range(0 if (n_iter + 1) * size % m > n_iter * size % m else (n_iter + 1) * size % m)]
+            mb = [randOrder[i] for i in range(n_iter * size % m, (n_iter + 1) * size % m if (n_iter + 1) * size % m > n_iter * size % m else m)] \
+                 + [randOrder[i] for i in range(0 if (n_iter + 1) * size % m > n_iter * size % m else (n_iter + 1) * size % m)]
 
             # Compute the conditional probability
-            pY= self.getClassProbs(X[mb,:])
+            pY = self.getClassProbs(X[mb, :])
 
-            # Update
+            # Update the stats
             for i in range(size):
                 delta = np.array([1 - pY[i, y] if y == Y[mb[i]] else 0 - pY[i, y] for y in range(self.cardY)])
                 for U in self.stats.U:
-                    self.stats.Nu[U][tuple(X[mb[i], U])]+= delta
+                    self.stats.Nu[U][tuple(X[mb[i], U])] += delta
 
-            n_iter+= 1
+            # Create the trace
+            if trace:
+                evolCLL.append(self.CLL(X, Y, normalize=True))
+                evolStats.append(self.stats.copy())
 
         if trace:
             return (np.array(evolCLL), evolStats)
