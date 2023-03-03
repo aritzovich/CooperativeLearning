@@ -234,108 +234,14 @@ class IBC(object):
             return np.array(evolCLL)
 
 
-    def stochasticTM(self, X, Y, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
-        '''
-        The stochastic TM: Each iteration consider a single instance, and the statistics are updated at every iteration
-
-          u^t+1= u^t - lr · (E^t-u_0)
-
-        where u^0 are the initial statistics, E^t is the maximum likelihood statistics obtained from X,p(Y|X,u^t)
-        and u_0 are the reference statistics
-
-        It has some similarities with Disciminative Frequency Estimate of "Su et al. (2008). Discriminative Parameter Learning
-        for Bayesian Networks".
-
-        :param X:
-        :param Y:
-        :param stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
-        :param max_iter: maximum iterations of
-        :param esz: equivalent sample size
-        :param trace: if Trace returns a summary of the execution of the DEF. False by default.
-        :return: the list of the CLL np.array(double). If trace==True then also the corresponding list of Stats list(Stats)
-        '''
-
-        m,n= X.shape
-
-        if seed is not None:
-            np.random.seed(seed)
-
-
-        if stats is not None:
-            # The initial statistics
-            self.stats= stats.copy()
-            n_iter = 0
-        else:
-            # The statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
-            self.learnMaxLikelihood(X, Y, esz=esz)
-            n_iter= m
-
-
-        cont= True
-
-        evolCLL = list()
-        if trace:
-            evolStats= list()
-
-        randOrder = np.random.permutation(m)
-        while(cont and n_iter<= max_iter):
-            cont= True
-
-            # Check if all the data has been used
-            if n_iter % m == 0:
-                # check consistency of the statistics
-                self.stats.checkConsistency()
-
-                randOrder= np.random.permutation(m)
-
-                # Compute and store de cond. log. likel. after visiting the whole data
-                evolCLL.append(self.CLL(X,Y))
-                if trace:
-                    evolStats.append(self.stats.copy())
-
-                if len(evolCLL)>1:
-                    if evolCLL[-1]<= evolCLL[-2]:
-                        cont= False
-                        #//TODO undo the update of the statistics
-
-                        del evolCLL[-1]
-                        if trace:
-                            del evolStats[-1]
-
-                # Check monotone increasing condition of CLL
-
-
-            # index of the instance in the data
-            ind= randOrder[n_iter % m]
-
-            # Compute the conditional probability
-            pY= self.getClassProb(X[ind,:])
-
-            # The loss
-            L= np.array([1-pY[y] if y== Y[ind] else 0-pY[y] for y in range(self.cardY)])
-
-            # Update
-            for U in self.stats.U:
-                self.stats.Nu[U][tuple(X[ind, U])]+= L
-
-            # Maximum likelihood estimate for nonsupervised statistics
-            #if n_iter/m<1:
-            #    for V in self.stats.V:
-            #        self.stats.Nv[V][tuple(X[ind, V])]+= 1
-
-            n_iter+= 1
-
-
-        if trace:
-            return (np.array(evolCLL), evolStats)
-        else:
-            return np.array(evolCLL)
-
     def minibatchTM(self, X, Y, size= 1, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
         '''
         Mini-batch stochastic TM.
 
         Mini-batch version of the TM algorithm that updates the statistics using randomly selected batches of data
+
+        For size= 1, is the stochastic TM. The stochastic TM has some similarities with Disciminative Frequency
+        Estimate of "Su et al. (2008). Discriminative Parameter Learning for Bayesian Networks".
 
         :param X:
         :param Y:
@@ -367,11 +273,21 @@ class IBC(object):
         evolCLL = list()
         if trace:
             evolStats= list()
+            # TODO: check if is the correct index (floor, ground, int?)
+            prevInd= int(size/m)
+        else:
+            prevInd= 1
+        prevStats= self.stats.copy()
 
         inds= [i for i in range(m)]
         randOrder = np.random.permutation(m)
         while(cont and n_iter<= max_iter):
             cont= True
+
+            # Compute and store de cond. log. likel. each iteration
+            if trace:
+                evolCLL.append(self.CLL(X, Y))
+                evolStats.append(self.stats.copy())
 
             # check if at least m instances have been used: size instances por each iteration
             if (n_iter*size % m) < size:
@@ -379,21 +295,25 @@ class IBC(object):
 
                 # check consistency of the statistics
                 self.stats.checkConsistency()
+                #TODO: do something when they are not consistent: i) stop the optimization, ii) force consistency
 
-                # Compute and store de cond. log. likel. after visiting the whole data
-                evolCLL.append(self.CLL(X,Y))
-                #evolCLL.append(np.sum(np.log(pY[:, Y])))
-                if trace:
-                    evolStats.append(self.stats.copy())
+                # store the cond. log. likel. after visiting all the data
+                if not trace:
+                    evolCLL.append(self.CLL(X,Y))
 
-                if len(evolCLL)>1:
-                    if evolCLL[-1]<= evolCLL[-2]:
+                if len(evolCLL)>prevInd:
+                    if evolCLL[-1]<= evolCLL[-(1+ prevInd)]:
                         cont= False
-                        #//TODO undo the update of the statistics
+
+                        self.stats= prevStats
 
                         del evolCLL[-1]
                         if trace:
                             del evolStats[-1]
+
+                    else:
+                        # Store the stats of the classifier as long as the CLL increases
+                        prevStats= self.stats.copy
 
                 # Check monotone increasing condition of CLL
 

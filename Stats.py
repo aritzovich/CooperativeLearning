@@ -98,6 +98,31 @@ class Stats(object):
 
         return
 
+    def random(self, esz= 10, alpha= None, X= None, seed= None):
+        '''
+        Generate the values of the statistics counts at random. Statistics are consistent under marginalization
+
+        :param esz: equivalent sample size of the statistics
+        :param alpha:
+        :param X:
+        :param seed:
+        :return:
+        '''
+
+        if seed:
+            np.random.seed(seed)
+        if not alpha:
+            alpha= 1.0
+        if not X:
+            X= np.zeros((len(self.card), esz))
+            for i in range(len(self.card)):
+                X[:,i]= np.random.choice(self.card[i], size= esz, p= np.random.dirichlet(np.ones(self.card[i])*alpha))
+
+        self.initCounts()
+        esz = X.shape[0]
+        pY= np.random.dirichlet(np.ones(self.cardY)*alpha, size= esz)
+        self.maximumWLikelihood(X,pY)
+
     def copy(self):
         '''
         Creates a copy of the statistics self.
@@ -204,17 +229,16 @@ class Stats(object):
             if S in self.U:
                 ind= self.Nu[S]- stats.Nu[S]<0
                 if np.any(ind):
-                    propU= np.min([np.min(self.Nu[S][ind]/ stats.Nu[S][ind]),prop])
+                    propU= np.min([np.min(self.Nu[S][ind]/ stats.Nu[S][ind]),propU])
 
         propV= 1.0
         for S in stats.V:
             if S in self.V:
                 ind = self.Nv[S] - stats.Nv[S] < 0
                 if np.any(ind):
-                    propV = np.min([np.min(self.Nv[S][ind] / stats.Nv[S][ind]), prop])
+                    propV = np.min([np.min(self.Nv[S][ind] / stats.Nv[S][ind]), propV])
 
         return (propU,propV)
-
 
     def maximumLikelihood(self, X,Y, U= None, V= None, esz= 0.0):
         '''
@@ -247,7 +271,6 @@ class Stats(object):
 
         return
 
-
     def maximumWLikelihood(self, X, pY, esz= 0.0):
 
         # Initialize the statistics
@@ -267,51 +290,6 @@ class Stats(object):
 
         #for S in self.Nu.keys():
         #    print(str(S) + ":\t" + str(np.sum(self.Nu[S])))
-
-
-    def condMaxLikelihood(self, X, h, eps= 10**-2, maxIter= 10, esz= 0.0):
-        '''
-        Learn conditional maximum likelihood parameters using the TM algorithm.
-
-        The main difference with IBD.leandCondMaxLikelihood is that in this method h is based on a subset of the
-        statistics from Stats. The TM step is given by
-
-        u^t= u^t-1 + u_0 - E^t-1[u]
-
-        where U in Stats, u_0 is given by currect stats (self), and E^t-1[u]= sum_{x in X} delta(x_U,u) h^t-1(y|x)
-
-        :param X: Unlabeled data
-        :param h: a classifier
-        :param esz:
-        :return:
-        '''
-
-        Theta0= Stats.copy()
-        h= h.copy()
-
-        cont= True
-        n_iter= 0
-        while(cont and n_iter< maxIter):
-            n_iter+=1
-
-            pY = h.getClassProbs(X)
-            Et = Stats.copy()
-            Et.maximumWLikelihood(X, pY, esz)
-
-            self.subtract(Et.subtract(Theta0))
-            h.setStats(self)
-
-            # Check validity of the parameters
-            for U in Et.U:
-                if np.any(self.stats.Nu[U] < 0):
-                    print("Negative parameters in: U=" + str(U))
-
-            # Check the convergence with precision eps
-            for U in Et.U:
-                if not np.allclose(Et.Nu[U], 0, atol=eps):
-                    cont = True
-                    break
-
 
     def entropy(self,sets):
         '''
@@ -339,7 +317,6 @@ class Stats(object):
 
         return H
 
-
     def serialize(self):
         '''
         Creates a np.array(double) with all the supervised statistics
@@ -351,7 +328,11 @@ class Stats(object):
 
     def checkConsistency(self):
         '''
-        It checks the consistency of the statistics under marginalization
+        It checks the consistency of the statistics:
+        - Non-negative counts
+        - Counts has to sum up the same valule
+
+        //TODO: consistency of the statistics under marginalization
         :return:
         '''
 
@@ -361,11 +342,6 @@ class Stats(object):
         for U in self.U:
             if np.any(self.Nu[U]<0):
                 print("INCONSISTENT Nu stats: negative counts")
-                #//TODO: eliminar los valores negativos y reescalar (son consistentes los estadisticos)
-                #sum= np.reshape(np.sum(self.Nu[U],axis=-1),(self.Nu[U].shape[-1],1)
-                #self.Nu[U][self.Nu[U] < 0]= 0
-                #sum_new= np.reshape(np.sum(self.Nu[U],axis=-1),(self.Nu[U].shape[-1],1)
-                #self.Nu[U]*= (sum/sum_new)
                 consistent= False
                 break
 
@@ -389,6 +365,17 @@ class Stats(object):
 
         return consistent
 
+    def forceConsistency(self, esz= None):
+        '''
+        Forces the consistency of the statistics by replacing negative counts by zero and by having that all the counts
+        sum up to the same value.
+
+        //TODO: implement Stats.forceConsistency procedure to check if corrections are beneficial. It is not clear how to guarantee the consistency under marginalization
+
+        :return:
+        '''
+
+        return None
 
 
 def marginalize(N_S, S, R):
