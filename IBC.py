@@ -284,7 +284,7 @@ class IBC(object):
 
         cont= True
         # Iterative update: number of iterations over the whole dataset
-        for n_iter in range(max_iter* np.ceil(m/size)):
+        for n_iter in range(max_iter* int(np.ceil(m/size))):
             if not cont:
                 break
 
@@ -424,7 +424,7 @@ class IBC(object):
         if normalize:
             CLL= CLL/m
 
-        CLL
+        return CLL
 
 
 # TOOLS FOR WORKING WITH THE STRUCTURE
