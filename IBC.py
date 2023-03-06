@@ -291,7 +291,7 @@ class IBC(object):
             if (n_iter % len(mb_inds) ==0) and n_iter>0:
 
                 # Get the indices of the minibatch particion
-                mb_inds= getMiniBatchIndices(m,size)
+                mb_inds= getMinibatchInds(m,size)
 
                 # check consistency of the statistics
                 self.stats.checkConsistency()
@@ -327,7 +327,7 @@ class IBC(object):
                         prevStats = self.stats.copy
 
             # current minibatch
-            mb = mb_inds[iter % len(mb_inds)]
+            mb = mb_inds[n_iter % len(mb_inds)]
 
             # Compute the conditional probability
             pY = self.getClassProbs(X[mb, :])
@@ -522,7 +522,7 @@ def getMinibatchInds(m, size, seed= None):
     #        + [randOrder[i] for i in range(0 if (ind + 1) * size % m > ind * size % m else (ind + 1) * size % m)])
     #          for ind in range(int(np.ceil(m/size)))]
 
-    mb_inds = [np.array([randOrder[i] for i in range(j*size, (j+1)* size)] for j in range(int(np.floor(m/size))))]
+    mb_inds = [np.array([randOrder[i] for i in range(j*size, (j+1)* size)]) for j in range(int(np.floor(m/size)))]
     if m % size >0:
         rem= m-size*int(np.floor(m/size))
         mb_inds.append(np.array([randOrder[i] for i in range(rem, m)]

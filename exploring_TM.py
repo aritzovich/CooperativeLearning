@@ -147,3 +147,4 @@ def miniBatch(dataName= "iris", numBatches= 3, percTrain= 1/3, maxIter= 10, seed
 
 
 if __name__ == '__main__':
+    miniBatch()
