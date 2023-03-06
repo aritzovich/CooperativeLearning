@@ -267,7 +267,6 @@ class IBC(object):
             self.learnMaxLikelihood(X, Y, esz=esz)
 
 
-
         prevStats= self.stats.copy()
         prevCLL= self.CLL(X,Y,normalize=True)
 
@@ -280,7 +279,7 @@ class IBC(object):
         else:
             prevInd= 1
 
-        randOrder = np.random.permutation(m)
+        mb_inds= getMinibatchInds(m,size)
 
         cont= True
         # Iterative update: number of iterations over the whole dataset
@@ -289,9 +288,10 @@ class IBC(object):
                 break
 
             # check if at least m instances have been used: "size" number of instances por each iteration
-            if (n_iter % np.ceil(m/size) ==0) and n_iter>0:
-                # Create a new ordering of the instances for the minibatches
-                randOrder = np.random.permutation(m)
+            if (n_iter % len(mb_inds) ==0) and n_iter>0:
+
+                # Get the indices of the minibatch particion
+                mb_inds= getMiniBatchIndices(m,size)
 
                 # check consistency of the statistics
                 self.stats.checkConsistency()
@@ -326,10 +326,8 @@ class IBC(object):
                         # Store the stats of the classifier as long as the CLL increases
                         prevStats = self.stats.copy
 
-            # Create the minibatch: random sampling without replacement of minibatch
-            # mb= np.random.choice(inds,size, replace= False)
-            mb = [randOrder[i] for i in range(n_iter * size % m, (n_iter + 1) * size % m if (n_iter + 1) * size % m > n_iter * size % m else m)] \
-                 + [randOrder[i] for i in range(0 if (n_iter + 1) * size % m > n_iter * size % m else (n_iter + 1) * size % m)]
+            # current minibatch
+            mb = mb_inds[iter % len(mb_inds)]
 
             # Compute the conditional probability
             pY = self.getClassProbs(X[mb, :])
@@ -499,6 +497,39 @@ def maximumWeigtedTree(W):
         remain.remove(b)
 
     return Pa,added_weight
+
+def getMinibatchInds(m, size, seed= None):
+    '''
+    Return the list of indices for the minibatch particion of a data set of size m into subsets of the given size.
+
+    If m is not multiple of size the last batch contain repeated instances from the other minibatches at random
+
+    TODO: test this procedure
+
+    :param m:
+    :param size:
+    :param seed:
+    :return:
+    '''
+
+    if seed:
+        np.random.seed(seed)
+
+    randOrder = np.random.permutation(m)
+
+    # mb_inds= [np.array([randOrder[i] for i in range(ind * size % m, (ind + 1) * size % m
+    #            if (ind + 1) * size % m > ind * size % m else m)] \
+    #        + [randOrder[i] for i in range(0 if (ind + 1) * size % m > ind * size % m else (ind + 1) * size % m)])
+    #          for ind in range(int(np.ceil(m/size)))]
+
+    mb_inds = [np.array([randOrder[i] for i in range(j*size, (j+1)* size)] for j in range(int(np.floor(m/size))))]
+    if m % size >0:
+        rem= m-size*int(np.floor(m/size))
+        mb_inds.append(np.array([randOrder[i] for i in range(rem, m)]
+                                + [randOrder[i] for i in np.random.Generator.choice(rem, size= size-rem)]))
+
+    return mb_inds
+
 
 
 

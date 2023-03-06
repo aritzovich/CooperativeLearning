@@ -1,4 +1,23 @@
+# This is a sample Python script.
+import time
 
+# Press Mayús+F10 to execute it or replace it with your code.
+# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas
+import sklearn as sk
+
+import IBC
+import Stats as st
+import IBC as ibc
+import ContStats as cst
+from sklearn.manifold import MDS
+from matplotlib import pyplot as plt
+from matplotlib.collections import LineCollection
+import seaborn as sbn
+import Utils as utl
 
 def boostrap():
     '''
@@ -72,3 +91,59 @@ def landscape():
     :return:
     '''
     return
+
+def miniBatch(dataName= "iris", numBatches= 3, percTrain= 1/3, maxIter= 10, seed= 0, numRep= 10):
+    '''
+    Explore the minibatch TM.
+    :return:
+    '''
+
+    D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=3)
+    X= D[:,:-1]
+    Y= D[:,-1]
+    card= np.max(X,axis=0)+1
+    cardY= np.max(Y)+1
+    n,m= X.shape
+
+    for seed in range(seed, seed+numRep):
+        # Training test split
+        np.random.seed(seed)
+        perm= np.random.permutation()
+        m_train= int(percTrain*m)
+        trainX= X[perm[:m_train],:]
+        trainY= Y[perm[:m_train]]
+        testX= X[perm[m_train:],:]
+        testY= Y[perm[m_train:]]
+
+        # Create the batches from training
+        mb= IBC.getMinibatchInds(m_train, int(m_train/numBatches))
+        mbX= [trainX[mb[i],:] for i in range(len(mb))]
+        mbY= [trainY[mb[i]] for i in range(len(mb))]
+
+        # The classifier
+        nb_struct= IBC.getNaiveBayesStruct(n)
+        h= IBC.IBC(card,cardY)
+        h.setBNstruct(nb_struct)
+
+
+        # global TM
+        globalCLL, Stats= h.learnCondMaxLikelihood(trainX,trainY,max_iter=maxIter,trace=True)
+        testCLL= [h.CLL(testX,testY, stats= stats) for stats in Stats]
+        mbCLL= [[h.CLL(mbX[i],mbY[i], stats= stats) for stats in Stats] for i in range(len(mb))]
+
+        # local TM for each batch
+        for ind_mb in range(len(mb)):
+            Stats = h.learnCondMaxLikelihood(mbX[ind_mb], mbY[ind_mb], max_iter=maxIter, trace=True)[1]
+            testCLL = [h.CLL(testX, testY, stats=stats) for stats in Stats]
+            globalCLL = [h.CLL(trainX,trainY, stats= stats) for stats in Stats]
+            mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
+
+        # minibatch TM
+        Stats= h.minibatchTM(trainX,trainY,max_iter=maxIter,trace=True,seed= seed)[1]
+        testCLL = [h.CLL(testX, testY, stats=stats) for stats in Stats]
+        globalCLL = [h.CLL(trainX, trainY, stats=stats) for stats in Stats]
+        mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
+
+
+
+if __name__ == '__main__':
