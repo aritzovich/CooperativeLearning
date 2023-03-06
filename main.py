@@ -20,7 +20,7 @@ import Utils as utl
 
 
 
-def TM_VS_DEF(dataName= 'iris', sizes=[20,35,75,140], numIter= 1, num_rep=100):
+def TM_VS_DEF(dataName= 'iris', sizes=[20,35,75,140], numIter= 10, num_rep=100):
 
     D,card= utl.loadSupervisedData(dataName= './data/'+dataName+'.csv',skipHeader=1, bins=3)
     n= len(card)-1
@@ -67,7 +67,7 @@ def TM_VS_DEF(dataName= 'iris', sizes=[20,35,75,140], numIter= 1, num_rep=100):
                 df.loc[len(df)]= [seed, dataName, size, 'STM_'+str(mb_size), i, 'CLL', CLL[-1]]
 
             mb_size= 10
-            CLL= h.stochasticTM(X= X, Y= Y, size= mb_size, max_iter= int(numIter*size/mb_size),seed=seed)
+            CLL= h.minibatchTM(X= X, Y= Y, size= mb_size, max_iter= int(numIter*size/mb_size),seed=seed)
             for i in range(len(CLL)):
                 df.loc[len(df)]= [seed, dataName, size, 'STM_'+str(mb_size), i, 'CLL', CLL[i]]
             for i in range(len(CLL),numIter):

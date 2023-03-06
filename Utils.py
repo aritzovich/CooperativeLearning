@@ -1,3 +1,5 @@
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -42,23 +44,23 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
                 if len(vals)<= maxDiscVals:
                     card[i] = len(vals)
                 else:
-                    card[i] = np.iinfo(np.int32).max
+                    card[i] = sys.maxsize
             else:
                 if len(vals) <= maxDiscVals:
                     card[i] = len(vals)
                 else:
-                    card[i] = np.iinfo(np.int32).max
+                    card[i] = sys.maxsize
         else:
             card[i]= len(np.unique(text[:,i]))
 
     if bins is not None:
         data = np.zeros((m,n),dtype=int)
     else:
-        data = np.zeros((m,n),dtype=np.float)
+        data = np.zeros((m,n),dtype=float)
 
     for i in range(n):
-        if card[i]== np.iinfo(int).max:
-            data[:,i] = np.array([np.float(x) for x in text[:, i]])
+        if card[i]== sys.maxsize:
+            data[:,i] = np.array([float(x) for x in text[:, i]])
         else:
             data[:,i] = np.unique(text[:, i], return_inverse=True)[1]
 
@@ -66,7 +68,7 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
     if bins is not None:
         #Discretize continuous data using equal frequency
         for i in range(n):
-            if card[i]== np.iinfo(np.int32).max:
+            if card[i]== sys.maxsize:
                 ordered = np.sort(data[:,i])
                 cut = [ordered[int((j + 1) * m / bins) - 1] for j in range(bins)]
                 cut[bins - 1] = ordered[m - 1]
