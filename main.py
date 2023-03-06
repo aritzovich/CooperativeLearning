@@ -12,7 +12,6 @@ import sklearn as sk
 import IBC
 import Stats as st
 import IBC as ibc
-import ContStats as cst
 from sklearn.manifold import MDS
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
@@ -93,18 +92,7 @@ def TM_VS_DEF(dataName= 'iris', sizes=[20,35,75,140], numIter= 1, num_rep=100):
     plt.show()
 
 
-
-
-def pruevas_contStat(dataName= 'glass'):
-
-    D,card= loadSupervisedData('./data/'+dataName+'.csv')
-
-    print(str(card)+'\n'+str(D))
-
-
-
-
-def pruebas(structs= ["NB"], domain= "ParSum", ms=[500],ns=[10],seed= 1, r= 2):
+def evolucionCLL(structs= ["NB"], domain= "ParSum", ms=[500],ns=[10],seed= 1, r= 2):
 
     np.random.seed(seed)
     mTest= 1000
@@ -264,8 +252,4 @@ def generateData(domain= "ParSum", m=10, n=5, r= 4):
 if __name__ == '__main__':
 
     TM_VS_DEF()
-#    pruevas_contStat()
-
-#    pruebas()
-#    TMevolution(n=10, m=100, r=2, seed=0)
 

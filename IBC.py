@@ -283,7 +283,7 @@ class IBC(object):
 
         cont= True
         # Iterative update: number of iterations over the whole dataset
-        for n_iter in range(max_iter* int(np.ceil(m/size))):
+        for n_iter in range(max_iter* len(mb_inds)):
             if not cont:
                 break
 
