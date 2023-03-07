@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 import matplotlib.pyplot as plt
-import pandas
+import pandas as pd
 import sklearn as sk
 
 import IBC
@@ -71,7 +71,6 @@ def learningRate():
 
     return
 
-
 def landscape():
     '''
     The TM is a dynamical system completely determined by the sample, D.
@@ -92,23 +91,28 @@ def landscape():
     '''
     return
 
-def miniBatch(dataName= "iris", numBatches= 3, percTrain= 1/3, maxIter= 10, seed= 0, numRep= 10):
+def miniBatch(dataName= "iris", numBatches= 3, percTrain= 1/3, maxIter=10, seed= 0, numRep= 20, resFile= "results_miniBatch.csv"):
     '''
     Explore the minibatch TM.
     :return:
     '''
+
+    try:
+        res= pd.read_csv(resFile)
+    except:
+        res= None
 
     D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=3)
     X= D[:,:-1]
     Y= D[:,-1]
     card= np.max(X,axis=0)+1
     cardY= np.max(Y)+1
-    n,m= X.shape
+    m, n= X.shape
 
     for seed in range(seed, seed+numRep):
         # Training test split
         np.random.seed(seed)
-        perm= np.random.permutation()
+        perm= np.random.permutation(m)
         m_train= int(percTrain*m)
         trainX= X[perm[:m_train],:]
         trainY= Y[perm[:m_train]]
@@ -131,6 +135,8 @@ def miniBatch(dataName= "iris", numBatches= 3, percTrain= 1/3, maxIter= 10, seed
         testCLL= [h.CLL(testX,testY, stats= stats) for stats in Stats]
         mbCLL= [[h.CLL(mbX[i],mbY[i], stats= stats) for stats in Stats] for i in range(len(mb))]
 
+        res= res_minibatch(seed, dataName, 'global', Stats, globalCLL, testCLL, mbCLL, res)
+
         # local TM for each batch
         for ind_mb in range(len(mb)):
             Stats = h.learnCondMaxLikelihood(mbX[ind_mb], mbY[ind_mb], max_iter=maxIter, trace=True)[1]
@@ -138,12 +144,32 @@ def miniBatch(dataName= "iris", numBatches= 3, percTrain= 1/3, maxIter= 10, seed
             globalCLL = [h.CLL(trainX,trainY, stats= stats) for stats in Stats]
             mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
 
+            res= res_minibatch(seed, dataName, 'mb_'+str(ind_mb), Stats, globalCLL, testCLL, mbCLL, res)
+
+
         # minibatch TM
-        Stats= h.minibatchTM(trainX,trainY,max_iter=maxIter,trace=True,seed= seed)[1]
+        Stats= h.minibatchTM(trainX, trainY, size= int(m_train/numBatches), max_iter=maxIter,trace=True, seed= seed, fixed_mb=True)[1]
         testCLL = [h.CLL(testX, testY, stats=stats) for stats in Stats]
         globalCLL = [h.CLL(trainX, trainY, stats=stats) for stats in Stats]
         mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
 
+        res = res_minibatch(seed, dataName, 'minibatch', Stats, globalCLL, testCLL, mbCLL, res)
+
+    res.to_csv(resFile)
+
+def res_minibatch(seed, data, method, stats, globalCLL, testCLL, mbCLL, res= None):
+
+    if res is None:
+        res = pd.DataFrame(columns=['seed', 'data', 'method', 'n_iter', 'stats', 'score', 'value'])
+
+    for i in range(len(globalCLL)):
+        ser= stats[i].serialize()
+        res.loc[len(res)] = [seed, data, method, i, ser, 'global', globalCLL[i]]
+        res.loc[len(res)] = [seed, data, method, i, ser, 'generalization', testCLL[i]]
+        for j in range(len(mbCLL)):
+            res.loc[len(res)] = [seed, data, method, i, ser, 'mb_' + str(j), mbCLL[j][i]]
+
+    return res
 
 
 if __name__ == '__main__':

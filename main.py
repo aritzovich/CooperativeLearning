@@ -20,7 +20,7 @@ import Utils as utl
 
 
 
-def TM_VS_DEF(dataName= 'iris', sizes=[20,35,75,140], numIter= 10, num_rep=100):
+def TM_VS_DEF(dataName= 'iris', sizes=[20,35,75,140], numIter= 10, num_rep=10):
 
     D,card= utl.loadSupervisedData(dataName= './data/'+dataName+'.csv',skipHeader=1, bins=3)
     n= len(card)-1

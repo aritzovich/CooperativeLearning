@@ -187,17 +187,11 @@ class IBC(object):
             stats0= self.stats.emptyCopy()
             stats0.maximumLikelihood(X,Y,esz= esz)
 
-        cont= True
-        n_iter= 0
-
         evolCLL = list()
         if trace:
             evolStats= list()
 
-        while(cont and n_iter< max_iter):
-            cont= True
-            n_iter+= 1
-
+        for n_iter in range(max_iter):
             #check consistency of the statistics
             self.stats.checkConsistency()
 
@@ -205,8 +199,8 @@ class IBC(object):
             pY= self.getClassProbs(X)
 
             # Compute and store de cond. log. likel.
-            minProb = 10 ** -6
-            evolCLL.append(np.sum(np.log([np.max((pY[i, Y[i]], minProb)) for i in range(m)])) / m)
+            evolCLL.append(self.CLL(X,Y,pY= pY))
+
             #evolCLL.append(np.sum(np.log(pY[:, Y])))
             if trace:
                 evolStats.append(self.stats.copy())
@@ -214,7 +208,6 @@ class IBC(object):
             if n_iter>1:
                 #Stoping criteria: CLL does not improve
                 if evolCLL[-1]<= evolCLL[-2]:
-                    cont= False
                     # undo the update of the statistics
                     N= self.stats.getSampleSize()
                     N_MWL= MWL.getSampleSize()
@@ -226,6 +219,9 @@ class IBC(object):
                     if trace:
                         del evolStats[-1]
 
+                    # Stop
+                    break
+
             MWL= self.stats.update(X,pY,stats0,lr= lr, esz= esz)
 
         if trace:
@@ -234,7 +230,7 @@ class IBC(object):
             return np.array(evolCLL)
 
 
-    def minibatchTM(self, X, Y, size= 1, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None):
+    def minibatchTM(self, X, Y, size= 1, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None, fixed_mb= False):
         '''
         Mini-batch stochastic TM.
 
@@ -242,6 +238,8 @@ class IBC(object):
 
         For size= 1, is the stochastic TM. The stochastic TM has some similarities with Disciminative Frequency
         Estimate of "Su et al. (2008). Discriminative Parameter Learning for Bayesian Networks".
+
+        TODO: learning rate
 
         :param X: training instances
         :param Y: the true class of the instances
@@ -274,30 +272,25 @@ class IBC(object):
         if trace:
             evolStats= [prevStats]
             evolCLL.append(prevCLL)
-            # TODO: check if is the correct index (floor, ground, int?)
-            prevInd= int(size/m)
-        else:
-            prevInd= 1
 
         mb_inds= getMinibatchInds(m,size)
 
-        cont= True
         # Iterative update: number of iterations over the whole dataset
         for n_iter in range(max_iter* len(mb_inds)):
-            if not cont:
-                break
 
             # check if at least m instances have been used: "size" number of instances por each iteration
             if (n_iter % len(mb_inds) ==0) and n_iter>0:
 
-                # Get the indices of the minibatch particion
-                mb_inds= getMinibatchInds(m,size)
+                if not fixed_mb:
+                    # Get the indices of the minibatch particion
+                    mb_inds= getMinibatchInds(m,size)
 
                 # check consistency of the statistics
                 self.stats.checkConsistency()
                 # TODO: do something when they are not consistent: i) stop the optimization, ii) force consistency
 
                 # store the cond. log. likel. after visiting all the data
+                # TODO: remove the computation of CLL after each iteration (too costly)
                 if not trace:
                     actCLL = self.CLL(X, Y, normalize=True)
                     evolCLL.append(actCLL)
@@ -307,28 +300,25 @@ class IBC(object):
                 if n_iter:
                     # Stop condition: monotone increasing of CLL
                     if actCLL< prevCLL:
-                        cont = False
-
                         # Restitute previos statistics
                         self.stats = prevStats
 
-                        #
                         if not trace:
                             # if not trace, remove the last CLL
                             del evolCLL[-1]
                         else:
                             # it trace, remove the CLLs and Stats since the previos model
-                            for i in range(np.ceil(m / size)):
+                            for i in range(int(np.ceil(m / size))):
                                 del evolCLL[-1]
                                 del evolStats[-1]
 
+                        break
                     else:
                         # Store the stats of the classifier as long as the CLL increases
-                        prevStats = self.stats.copy
+                        prevStats = self.stats.copy()
 
             # current minibatch
             mb = mb_inds[n_iter % len(mb_inds)]
-
             # Compute the conditional probability
             pY = self.getClassProbs(X[mb, :])
 
@@ -376,8 +366,12 @@ class IBC(object):
             IBC_stats= self.stats
             self.stats= stats
 
-        py = np.prod(np.row_stack([self.stats.Nu[U][tuple(x[list(U)])] ** self.expU[U] for U in self.expU]),
-                     axis=0) * np.prod([self.stats.Nv[V][tuple(x[list(V)])] ** self.expV[V] for V in self.expV])
+        try:
+            py = np.prod(np.row_stack([self.stats.Nu[U][tuple(x[list(U)])] ** self.expU[U] for U in self.expU]),
+                         axis=0) * np.prod([self.stats.Nv[V][tuple(x[list(V)])] ** self.expV[V] for V in self.expV])
+        except:
+            py = np.prod(np.row_stack([self.stats.Nu[U][tuple(x[list(U)])] ** self.expU[U] for U in self.expU]),
+                         axis=0) * np.prod([self.stats.Nv[V][tuple(x[list(V)])] ** self.expV[V] for V in self.expV])
 
         #[tuple(x[list(U)]) for U in self.expU]
         #[U for U in self.expU]
@@ -404,14 +398,16 @@ class IBC(object):
         else:
             return np.sum(1 - self.getClassProbs(X)[range(m), Y])/m
 
-    def CLL(self, X, Y, normalize= True, stats= None):
+    def CLL(self, X, Y, pY=None, normalize= True, stats= None):
 
         if stats:
             IBC_stats= self.stats
             self.stats= stats
 
         m,n= X.shape
-        pY= self.getClassProbs(X)
+        if pY is None:
+            pY= self.getClassProbs(X)
+
         # avoid zero probabilities
         minProb= 10**-6
         CLL= np.sum(np.log([np.max((pY[i,Y[i]],minProb)) for i in range(m)]))
@@ -517,16 +513,10 @@ def getMinibatchInds(m, size, seed= None):
 
     randOrder = np.random.permutation(m)
 
-    # mb_inds= [np.array([randOrder[i] for i in range(ind * size % m, (ind + 1) * size % m
-    #            if (ind + 1) * size % m > ind * size % m else m)] \
-    #        + [randOrder[i] for i in range(0 if (ind + 1) * size % m > ind * size % m else (ind + 1) * size % m)])
-    #          for ind in range(int(np.ceil(m/size)))]
-
     mb_inds = [np.array([randOrder[i] for i in range(j*size, (j+1)* size)]) for j in range(int(np.floor(m/size)))]
-    if m % size >0:
-        rem= m-size*int(np.floor(m/size))
-        mb_inds.append(np.array([randOrder[i] for i in range(rem, m)]
-                                + [randOrder[i] for i in np.random.Generator.choice(rem, size= size-rem)]))
+    #if m % size >0:
+    #    rem= m-size*int(np.floor(m/size))
+    #    mb_inds.append(np.array(list(randOrder[-rem:]) + [randOrder[i] for i in np.random.choice(m-rem, size= size- rem)]))
 
     return mb_inds
 
