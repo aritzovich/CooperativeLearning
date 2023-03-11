@@ -192,9 +192,6 @@ class IBC(object):
             evolStats= list()
 
         for n_iter in range(max_iter):
-            #check consistency of the statistics
-            self.stats.checkConsistency()
-
             # Compute the conditional probability
             pY= self.getClassProbs(X)
 
@@ -207,7 +204,7 @@ class IBC(object):
 
             if n_iter>1:
                 #Stoping criteria: CLL does not improve
-                if evolCLL[-1]<= evolCLL[-2]:
+                if evolCLL[-1]<= evolCLL[-2] or not self.stats.checkConsistency():
                     # undo the update of the statistics
                     N= self.stats.getSampleSize()
                     N_MWL= MWL.getSampleSize()
@@ -280,42 +277,30 @@ class IBC(object):
 
             # check if at least m instances have been used: "size" number of instances por each iteration
             if (n_iter % len(mb_inds) ==0) and n_iter>0:
+                actCLL= self.CLL(X, Y, normalize=True)
 
                 if not fixed_mb:
                     # Get the indices of the minibatch particion
                     mb_inds= getMinibatchInds(m,size)
 
-                # check consistency of the statistics
-                self.stats.checkConsistency()
-                # TODO: do something when they are not consistent: i) stop the optimization, ii) force consistency
-
                 # store the cond. log. likel. after visiting all the data
-                # TODO: remove the computation of CLL after each iteration (too costly)
-                if not trace:
-                    actCLL = self.CLL(X, Y, normalize=True)
-                    evolCLL.append(actCLL)
+                evolCLL.append(actCLL)
+                if trace:
+                    evolStats.append(self.stats.copy())
+
+                # Stop condition: monotone increasing of CLL
+                if actCLL< prevCLL or not self.stats.checkConsistency():
+                    # Restitute previos statistics
+                    self.stats = prevStats
+
+                    del evolCLL[-1]
+                    if trace:
+                        del evolStats[-1]
+
+                    break
                 else:
-                    actCLL = evolCLL[-1]
-
-                if n_iter:
-                    # Stop condition: monotone increasing of CLL
-                    if actCLL< prevCLL:
-                        # Restitute previos statistics
-                        self.stats = prevStats
-
-                        if not trace:
-                            # if not trace, remove the last CLL
-                            del evolCLL[-1]
-                        else:
-                            # it trace, remove the CLLs and Stats since the previos model
-                            for i in range(int(np.ceil(m / size))):
-                                del evolCLL[-1]
-                                del evolStats[-1]
-
-                        break
-                    else:
-                        # Store the stats of the classifier as long as the CLL increases
-                        prevStats = self.stats.copy()
+                    # Store the stats of the classifier as long as the CLL increases
+                    prevStats = self.stats.copy()
 
             # current minibatch
             mb = mb_inds[n_iter % len(mb_inds)]
@@ -327,11 +312,6 @@ class IBC(object):
                 delta = np.array([1 - pY[i, y] if y == Y[mb[i]] else 0 - pY[i, y] for y in range(self.cardY)])
                 for U in self.stats.U:
                     self.stats.Nu[U][tuple(X[mb[i], U])] += delta
-
-            # Create the trace
-            if trace:
-                evolCLL.append(self.CLL(X, Y, normalize=True))
-                evolStats.append(self.stats.copy())
 
         if trace:
             return (np.array(evolCLL), evolStats)
