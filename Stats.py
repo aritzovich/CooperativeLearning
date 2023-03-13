@@ -321,16 +321,19 @@ class Stats(object):
         '''
         Creates a np.array(double) with all the supervised statistics
 
+        The last statistics corresponds to the sample size of the supervised statistics
+
         :return: The concatenation of the flattened supervised statistics
         '''
 
-        return np.concatenate([Nu.flatten() for Nu in self.Nu.values()])
+        return np.concatenate([np.concatenate([Nu.flatten() for Nu in self.Nu.values()]),
+                               np.array(np.sum(next(iter(self.Nu.values())))).flatten()])
 
     def checkConsistency(self):
         '''
         It checks the consistency of the statistics:
         - Non-negative counts
-        - Counts has to sum up the same valule
+        - Counts has to sum up the same value
 
         //TODO: consistency of the statistics under marginalization
         :return:

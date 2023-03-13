@@ -18,6 +18,7 @@ from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 import seaborn as sbn
 import Utils as utl
+import itertools as itr
 
 def boostrap():
     '''
@@ -93,7 +94,7 @@ def landscape():
 
 from sklearn.manifold import MDS
 
-def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=10, seed= 0, numRep= 5, resFile= "results_miniBatch.csv"):
+def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=10, seed= 0, numRep= 9, resFile= "results_miniBatch.csv"):
     '''
     Explore the minibatch TM.
     :return:
@@ -140,8 +141,10 @@ def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=10, seed=
         res= res_minibatch(seed, dataName, m, n,'global', Stats, globalCLL, testCLL, mbCLL, res)
 
         # local TM for each batch
+        mbStats= list()
         for ind_mb in range(len(mb)):
             Stats = h.learnCondMaxLikelihood(mbX[ind_mb], mbY[ind_mb], max_iter=maxIter, trace=True)[1]
+            mbStats.append(Stats[-1])
             testCLL = [h.CLL(testX, testY, stats=stats) for stats in Stats]
             globalCLL = [h.CLL(trainX,trainY, stats= stats) for stats in Stats]
             mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
@@ -157,6 +160,15 @@ def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=10, seed=
 
         res = res_minibatch(seed, dataName, m, n, 'minibatch', Stats, globalCLL, testCLL, mbCLL, res)
 
+        Stats= [mbStats[0]]
+        for i in range(1,len(mb)):
+            Stats[0].add(mbStats[i])
+
+        testCLL = [h.CLL(testX, testY, stats=stats) for stats in Stats]
+        globalCLL = [h.CLL(trainX, trainY, stats=stats) for stats in Stats]
+        mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
+
+        res = res_minibatch(seed, dataName, m, n, 'avg.MB', Stats, globalCLL, testCLL, mbCLL, res)
 
     res.to_pickle(resFile)
 
@@ -183,19 +195,24 @@ def plot_minibatch(resFile= "results_miniBatch.csv"):
     aux = res.loc[res['score'] == 'global', :]
     #aux = aux.loc[res['seed'] == 0, :]
     mds = MDS(n_components=2)
-    embedded = mds.fit_transform(pd.DataFrame(aux['stats'].to_list()).values)
+    embedded = mds.fit_transform([stats[:-1]/stats[-1] for stats in pd.DataFrame(aux['stats'].to_list()).values])
     aux['$N_0$']=embedded[:,0]
     aux['$N_1$']=embedded[:,1]
     data= 'iris'
     color = 'method'
-    style = 'seed'
+    style = 'method'
     num_colors = len(aux[color].drop_duplicates().values)
     palette = sbn.color_palette("husl", num_colors)
 
-    fig, ax = plt.subplots(1)
-    sbn.scatterplot(data=aux, x='$N_0$', y='$N_1$', style=style, hue=color, palette=palette).set_title(data)
-    plt.savefig(data + '.pdf', bbox_inches='tight')
-    plt.show()
+    g = sbn.FacetGrid(aux, col="seed", hue=color, palette=palette, col_wrap=3)
+    g.map(sbn.scatterplot, '$N_0$', '$N_1$')
+    g.add_legend()
+    g.savefig(data + '.pdf', bbox_inches='tight')
+
+    #fig, ax = plt.subplots(np.unique(aux['seed']))
+    #sbn.scatterplot(data=aux.loc[aux['seed'] == seeds.__next__(), :], x='$N_0$', y='$N_1$', style=style, hue=color, palette=palette).set_title(data)
+    #plt.savefig(data + '.pdf', bbox_inches='tight')
+    #plt.show()
 
     #acceder a las filas del puto pandas: iloc (con indices) y loc con pandas series y con listas
     #res.loc[res['method']== 'global',:]

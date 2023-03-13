@@ -265,10 +265,9 @@ class IBC(object):
         prevStats= self.stats.copy()
         prevCLL= self.CLL(X,Y,normalize=True)
 
-        evolCLL = list()
+        evolCLL = [prevCLL]
         if trace:
             evolStats= [prevStats]
-            evolCLL.append(prevCLL)
 
         mb_inds= getMinibatchInds(m,size)
 
