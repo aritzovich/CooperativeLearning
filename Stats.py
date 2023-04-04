@@ -123,6 +123,17 @@ class Stats(object):
         pY= np.random.dirichlet(np.ones(self.cardY)*alpha, size= esz)
         self.maximumWLikelihood(X,pY)
 
+    def uniform(self, esz):
+        '''
+        Create uniform statistics with a given equivalent sample size
+        :param esz:
+        :return:
+        '''
+
+        self.initCounts(esz= esz)
+
+
+
     def copy(self):
         '''
         Creates a copy of the statistics self.
@@ -407,6 +418,25 @@ def marginalize(N_S, S, R):
     N_R= np.sum(N_S,axis=(inds))
 
     return N_R
+
+def average(lStats, esz= None):
+    '''
+    Return the average of the list of stats
+    :param lStats: list of stats, list(Stats)
+    :param esz: equivalent sample size of the averaged stats. If None the equivalent sample size is obtained from the
+    first element of the list of statistics lStats.
+    :return:
+    '''
+
+    if esz==None:
+        esz= lStats[0].getSampleSize()
+    avg= lStats[0].emptyCopy()
+
+    for stats in lStats:
+        s= stats.getSampleSize()
+        avg.add(stats,prop= esz/(s*len(lStats)))
+
+    return avg
 
 
 

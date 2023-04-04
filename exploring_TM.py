@@ -10,6 +10,7 @@ import pandas as pd
 import sklearn as sk
 
 import IBC
+import Stats
 import Stats as st
 import IBC as ibc
 import ContStats as cst
@@ -19,6 +20,7 @@ from matplotlib.collections import LineCollection
 import seaborn as sbn
 import Utils as utl
 import itertools as itr
+from sklearn.manifold import MDS
 
 def boostrap():
     '''
@@ -92,18 +94,16 @@ def landscape():
     '''
     return
 
-from sklearn.manifold import MDS
-
-def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=10, seed= 0, numRep= 9, resFile= "results_miniBatch.csv"):
+def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=50, seed= 0, numRep= 9, esz= 1, resFile= "results_miniBatch.csv"):
     '''
     Explore the minibatch TM.
     :return:
     '''
 
-    try:
-        res= pd.read_pickle(resFile)
-    except:
-        res= None
+    #try:
+    #    res= pd.read_pickle(resFile)
+    #except:
+    res= None
 
     D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=3)
     X= D[:,:-1]
@@ -134,31 +134,30 @@ def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=10, seed=
 
 
         # global TM
-        globalCLL, Stats= h.learnCondMaxLikelihood(trainX,trainY,max_iter=maxIter,trace=True)
+        globalCLL, Stats= h.learnCondMaxLikelihood(trainX,trainY,max_iter=maxIter,esz= esz, trace=True)
         testCLL= [h.CLL(testX,testY, stats= stats) for stats in Stats]
         mbCLL= [[h.CLL(mbX[i],mbY[i], stats= stats) for stats in Stats] for i in range(len(mb))]
-
-        res= res_minibatch(seed, dataName, m, n,'global', Stats, globalCLL, testCLL, mbCLL, res)
+        res= res_minibatch(seed, dataName, esz, m, n,'global', Stats, globalCLL, testCLL, mbCLL, res)
 
         # local TM for each batch
         mbStats= list()
         for ind_mb in range(len(mb)):
-            Stats = h.learnCondMaxLikelihood(mbX[ind_mb], mbY[ind_mb], max_iter=maxIter, trace=True)[1]
+            Stats = h.learnCondMaxLikelihood(mbX[ind_mb], mbY[ind_mb], max_iter=maxIter, esz= esz/numBatches, trace=True)[1]
             mbStats.append(Stats[-1])
             testCLL = [h.CLL(testX, testY, stats=stats) for stats in Stats]
             globalCLL = [h.CLL(trainX,trainY, stats= stats) for stats in Stats]
             mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
 
-            res= res_minibatch(seed, dataName, m, n, 'mb_'+str(ind_mb), Stats, globalCLL, testCLL, mbCLL, res)
+            res= res_minibatch(seed, dataName, esz, m, n, 'mb_'+str(ind_mb), Stats, globalCLL, testCLL, mbCLL, res)
 
 
         # minibatch TM
-        Stats= h.minibatchTM(trainX, trainY, size= int(m_train/numBatches), max_iter=maxIter,trace=True, seed= seed, fixed_mb=True)[1]
+        Stats= h.minibatchTM(trainX, trainY, size= int(m_train/numBatches), max_iter=maxIter,trace=True, esz= esz, seed= seed, fixed_mb=True)[1]
         testCLL = [h.CLL(testX, testY, stats=stats) for stats in Stats]
         globalCLL = [h.CLL(trainX, trainY, stats=stats) for stats in Stats]
         mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
 
-        res = res_minibatch(seed, dataName, m, n, 'minibatch', Stats, globalCLL, testCLL, mbCLL, res)
+        res = res_minibatch(seed, dataName, esz, m, n, 'minibatch', Stats, globalCLL, testCLL, mbCLL, res)
 
         Stats= [mbStats[0]]
         for i in range(1,len(mb)):
@@ -168,29 +167,35 @@ def miniBatch(dataName= "iris", numBatches= 2, percTrain= 3/4, maxIter=10, seed=
         globalCLL = [h.CLL(trainX, trainY, stats=stats) for stats in Stats]
         mbCLL = [[h.CLL(mbX[i], mbY[i], stats=stats) for stats in Stats] for i in range(len(mb))]
 
-        res = res_minibatch(seed, dataName, m, n, 'avg.MB', Stats, globalCLL, testCLL, mbCLL, res)
+        res = res_minibatch(seed, dataName, esz, m, n, 'avg.MB', Stats, globalCLL, testCLL, mbCLL, res)
 
     res.to_pickle(resFile)
 
-def res_minibatch(seed, data, m, n, method, stats, globalCLL, testCLL, mbCLL, res= None):
+def res_minibatch(seed, data, esz, m, n, method, stats, globalCLL, testCLL, mbCLL, res= None):
 
     if res is None:
-        res = pd.DataFrame(columns=['seed', 'data', '$m$', '$n$', 'method', 'n_iter', 'stats', 'score', 'value'])
+        res = pd.DataFrame(columns=['seed', 'data', 'esz', '$m$', '$n$', 'method', 'n_iter', 'stats', 'score', 'value'])
 
     #U= [(i,) for i in range(n)]
 
     for i in range(len(globalCLL)):
         ser= stats[i].serialize()
-        res.loc[len(res)] = [seed, data, m, n, method, i, ser, 'global', globalCLL[i]]
-        res.loc[len(res)] = [seed, data, m, n, method, i, ser, 'generalization', testCLL[i]]
+        res.loc[len(res)] = [seed, data, esz, m, n, method, i, ser, 'global', globalCLL[i]]
+        res.loc[len(res)] = [seed, data, esz, m, n, method, i, ser, 'generalization', testCLL[i]]
         for j in range(len(mbCLL)):
-            res.loc[len(res)] = [seed, data, m, n, method, i, ser, 'mb_' + str(j), mbCLL[j][i]]
+            res.loc[len(res)] = [seed, data,esz, m, n, method, i, ser, 'mb_' + str(j), mbCLL[j][i]]
 
     return res
 
 def plot_minibatch(resFile= "results_miniBatch.csv"):
 
     res = pd.read_pickle(resFile)
+    data = 'iris'
+    color = 'method'
+    style = 'score'
+    num_colors = len(res[color].drop_duplicates().values)
+    palette = sbn.color_palette("husl", num_colors)
+
 
     aux = res.loc[res['score'] == 'global', :]
     #aux = aux.loc[res['seed'] == 0, :]
@@ -198,25 +203,68 @@ def plot_minibatch(resFile= "results_miniBatch.csv"):
     embedded = mds.fit_transform([stats[:-1]/stats[-1] for stats in pd.DataFrame(aux['stats'].to_list()).values])
     aux['$N_0$']=embedded[:,0]
     aux['$N_1$']=embedded[:,1]
-    data= 'iris'
     color = 'method'
-    style = 'method'
-    num_colors = len(aux[color].drop_duplicates().values)
-    palette = sbn.color_palette("husl", num_colors)
+    style = 'score'
 
+        
     g = sbn.FacetGrid(aux, col="seed", hue=color, palette=palette, col_wrap=3)
     g.map(sbn.scatterplot, '$N_0$', '$N_1$')
     g.add_legend()
-    g.savefig(data + '.pdf', bbox_inches='tight')
+    g.savefig(data + '_scatterplot-ml.pdf', bbox_inches='tight')
+
+    aux = res.loc[res['score'] == 'global', :]
+    # aux = aux.loc[res['seed'] == 0, :]
+    mds = MDS(n_components=2)
+    embedded = mds.fit_transform([stats[:-1] / stats[-1] for stats in pd.DataFrame(aux['stats'].to_list()).values])
+    aux['$N_0$'] = embedded[:, 0]
+    aux['$N_1$'] = embedded[:, 1]
+    color = 'method'
+    style = 'score'
+
+    sbn.lineplot()
+
+
+
+    '''
+
+    'seed', 'data', 'esz', '$m$', '$n$', 'method', 'n_iter', 'stats', 'score', 'value'
+
+    aux = res
+    # Plot the lines on two facets
+    g= sbn.lineplot(data=aux, x="n_iter", y="value", hue="method", size="score", kind="line",
+        size_order= ['global','generalization'], palette=palette
+    )# Plot the lines on two facets
+    g.add_legend()
+    g.savefig(data + '_lineplot.pdf', bbox_inches='tight')
 
     #fig, ax = plt.subplots(np.unique(aux['seed']))
     #sbn.scatterplot(data=aux.loc[aux['seed'] == seeds.__next__(), :], x='$N_0$', y='$N_1$', style=style, hue=color, palette=palette).set_title(data)
     #plt.savefig(data + '.pdf', bbox_inches='tight')
     #plt.show()
 
-    #acceder a las filas del puto pandas: iloc (con indices) y loc con pandas series y con listas
+    #acceder a las filas de pandas dataframe: iloc (con indices) y loc con pandas series y con listas
     #res.loc[res['method']== 'global',:]
+    '''
+
+def initialization_effect(data, esz, alpha, b, max_iter= 50, num_rep= 10, seed= 0)
+    '''
+    Analizar el efecto de la inicializacion en minibatch y en TM. La inicializacion puede combinar los parametros
+    maximo verosimiles y una inicializacion uniforme.
+    
+    :param data: data set
+    :param esz: equivalent size of the initial statistics 
+    :param alpha: hiperparameter for the Dirichlet from which the initial statistics are obtained
+    :param b: number of batches of the minicath
+    :param max_iter: maximum number of iterations
+    :param numRep: number of repetitions of the experiment 
+    :param seed: initial random seed, (seed,...,seed+num_rep-1)
+    :return: saves a data frame with the obtained results
+    '''
+
+
+
+
 
 if __name__ == '__main__':
-    miniBatch()
+#    miniBatch()
     plot_minibatch()

@@ -411,7 +411,7 @@ def getNaiveBayesStruct(n):
     '''
     return [[n] for i in range(n)] + [[]]
 
-def getTANStruct(n, ancOrd= None, seed= None):
+def getRandTANStruct(n, ancOrd= None, seed= None):
     '''
     Creates a random tree-augmented naive Bayes structure. The class has index n
 
