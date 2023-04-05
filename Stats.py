@@ -206,7 +206,7 @@ class Stats(object):
 
         self = self - lr · (max_likel_stats(X,pY) - ref_stats)
 
-        The implied statistics are scaled to the sample size of self.
+        The implied statistics are scaled to the sample size of X.
 
         :param X: Unsupervised data
         :param pY: probability of the class for the samples X
@@ -217,12 +217,11 @@ class Stats(object):
 
         MWL= self.emptyCopy()
         MWL.maximumWLikelihood(X, pY, esz=esz)
-        N_MWL= MWL.getSampleSize()
+        N= X.shape[0]
         N_ref= ref_stats.getSampleSize()
-        N= self.getSampleSize()
 
         self.add(ref_stats, prop=lr*N/N_ref)
-        self.subtract(MWL, prop=lr*N/N_MWL)
+        self.subtract(MWL, prop=lr)
 
         return MWL
 
