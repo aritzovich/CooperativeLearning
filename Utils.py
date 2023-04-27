@@ -109,11 +109,11 @@ def missing_value_imputation(df, imputation_type="mode", max_distinct_values=5):
     return df
 
 
-def plot_results(df, theme='darkgrid', export_path=None):
+def plot_results(df, theme='darkgrid', export_path=None, title=None):
     sns.set_theme(style=theme)
     sns.lineplot(x="time", y="score",
                  hue="score_name", style="BN_Structure",
-                 data=df)
+                 data=df).set(title=title)
     if export_path:
         plt.savefig(export_path, format='pdf')
     else:

@@ -2,8 +2,7 @@ import numpy as np
 
 from Stats import Stats
 from GenerateData import generate_data_domains
-from IBC import IBC
-
+import IBC
 
 class Client:
 
@@ -16,10 +15,12 @@ class Client:
         self.n_vars = self.data.shape[1]
         self.card_x = card_x
         self.card_y = card_y
-        self.classifier = IBC(self.card_x, self.card_y)
+        self.classifier = IBC.IBC(self.card_x, self.card_y)
         self.classifier_structure = classif_structure
+        m, n = data.shape
         if classif_structure == "NB":
-            self.classifier.setBNstruct([[self.n_vars] for i in range(self.n_vars)] + [[]])
+            nb = IBC.getNaiveBayesStruct(n - 1)
+            self.classifier.setBNstruct(nb)
         elif classif_structure == "TAN":
             # (0,1), (1,2), ..., (n-2,n-1)
             self.classifier.setBNstruct([[self.n_vars]] + [[i - 1, self.n_vars] for i in range(1, self.n_vars)] + [[]])
