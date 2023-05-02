@@ -174,6 +174,23 @@ class Stats(object):
 
         return 0
 
+    def setSampleSize(self,esz= 1):
+        '''
+        Scales the statistics to have the desired equivalent sample size
+        :param esz: the desired equivalent sample size
+        :return: None
+        '''
+        #TODO testar
+
+        act_esz= self.getSampleSize()
+
+        for S in self.U:
+            self.Nu[S]*= esz/act_esz
+
+        for S in self.V:
+            self.Nv[S]*= esz/act_esz
+
+
     def add(self, stats, prop= 1.0):
         for S in stats.U:
             if S in self.U:
@@ -202,11 +219,13 @@ class Stats(object):
 
     def update(self, X, pY, ref_stats, lr=1.0, esz= 0):
         '''
-        This method update the statistics:
+        This method update the statistics according to:
 
         self = self - lr · (max_likel_stats(X,pY) - ref_stats)
 
-        The implied statistics are scaled to the sample size of X.
+        , where ref_stats are scaled to the sample size of X.
+
+        The procedure is the basis for the methods for learning the maximum conditional likelihood parameters.
 
         :param X: Unsupervised data
         :param pY: probability of the class for the samples X
@@ -224,6 +243,7 @@ class Stats(object):
         self.subtract(MWL, prop=lr)
 
         return MWL
+
 
     def min_ratio(self, stats):
         '''

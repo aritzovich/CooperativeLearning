@@ -152,19 +152,19 @@ class IBC(object):
         self.initStats()
         self.stats.maximumLikelihood(X, Y, esz=esz)
 
-    def learnCondMaxLikelihood(self, X, Y, stats= None, stats0= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False):
+    def learnCondMaxLikelihood(self, X, Y, init_stats= None, ref_stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False):
         '''
         The TM algorithm
 
           u^t+1= u^t - lr · (E^t-u_0)
 
-        where u^0 are the initial statistics, E^t is the maximum likelihood statistics obtained from X,p(Y|X,u^t)
+        where u^0 are the initial statistics, E^t is the maximum likelihood statistics obtained from X,p(·|X,u^t)
         and u_0 are the reference statistics
 
         :param X:
         :param Y:
-        :param stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
-        :param stats0: if not None, the reference statistics that define the likelihood problem
+        :param init_stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
+        :param ref_stats: if not None, the reference statistics that define the likelihood problem
         :param max_iter: maximum iterations of
         :param esz: equivalent sample size
         :param trace: if Trace returns a summary of the execution of the TM False by default.
@@ -174,18 +174,19 @@ class IBC(object):
 
         m,n= X.shape
 
-
-        if stats is not None:
-            # The initial statistics
-            self.stats= stats.copy()
+        # The initial statistics u^0. Used in the first update u^1= u^0 - lr · (E^0-u_0)
+        if init_stats is not None:
+            self.stats= init_stats.copy()
         else:
             # The statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
             self.learnMaxLikelihood(X,Y,esz=esz)
 
-        if stats0 is None:
-            # maximum likelihood statistics. Required for the update U^t= U^{t-1} + U^0 - E_{N^{t-1}}[U|x]
-            stats0= self.stats.emptyCopy()
-            stats0.maximumLikelihood(X,Y,esz= esz)
+        # Reference statistics u_0
+        # TODO reference statistics has to have the same equivalent sample size than the expectance E^t 
+        if ref_stats is None:
+            # Reference statistics, u_0. Required for the update U^t= U^{t-1} + U^0 - E_{N^{t-1}}[U|x]
+            ref_stats= self.stats.emptyCopy()
+            ref_stats.maximumLikelihood(X,Y,esz= esz)
 
         evolCLL = list()
         if trace:
@@ -209,8 +210,8 @@ class IBC(object):
                     N= self.stats.getSampleSize()
                     N_MWL= MWL.getSampleSize()
                     self.stats.add(MWL, prop= lr*N/N_MWL)
-                    N_0= stats0.getSampleSize()
-                    self.stats.subtract(stats0, prop= lr*N/N_0)
+                    N_0= ref_stats.getSampleSize()
+                    self.stats.subtract(ref_stats, prop= lr*N/N_0)
 
                     del evolCLL[-1]
                     if trace:
@@ -219,15 +220,21 @@ class IBC(object):
                     # Stop
                     break
 
-            MWL= self.stats.update(X,pY,stats0,lr= lr, esz= esz)
+            MWL= self.stats.update(X,pY,ref_stats,lr= lr, esz= esz)
 
         if trace:
             return (np.array(evolCLL), evolStats)
         else:
             return np.array(evolCLL)
 
+    def learnMinLogLoss(self, X, Y, init_stats= None, esz= 1.0, max_iter= 10, lr= 1.0, mb_size= None, fixed_mb= False, trace= False, seed= None):
 
-    def minibatchTM(self, X, Y, size= 1, stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None, fixed_mb= False):
+        if mb_size== None:
+            mb_size= X.shape[0]
+
+        return self.minibatchTM(X, Y, size= mb_size, init_stats= init_stats, max_iter= max_iter, esz= esz, lr= lr, trace= trace, seed= seed, fixed_mb= fixed_mb)
+
+    def minibatchTM(self, X, Y, size= 1, init_stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False, seed= None, fixed_mb= False):
         '''
         Mini-batch stochastic TM.
 
@@ -237,13 +244,14 @@ class IBC(object):
         Estimate of "Su et al. (2008). Discriminative Parameter Learning for Bayesian Networks".
 
         TODO: learning rate
+        TODO: eliminar metodo y reemplazarlo por learnMinLogLoss
 
         :param X: training instances
         :param Y: the true class of the instances
         :param size: the size of the minibatches
-        :param stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
+        :param init_stats: if not None, the initial statistics of the model, u^t for t= 0. Used to compute E^t for t= 0.
         :param max_iter: maximum iterations of
-        :param esz: equivalent sample size
+        :param esz: equivalent sample size of the uniform prior for the maximum likelihood initial statistics
         :param trace: if Trace returns a summary of the execution of the DEF. False by default.
         :return: the list of the CLL np.array(double). If trace==True then also the corresponding list of Stats list(Stats)
         '''
@@ -254,9 +262,9 @@ class IBC(object):
             np.random.seed(seed)
 
 
-        if stats is not None:
+        if init_stats is not None:
             # The initial statistics
-            self.stats= stats.copy()
+            self.stats= init_stats.copy()
         else:
             # The statistics of N^t=(U^t,V^t). They are used to compute the expectance E_{N^t}[U|x]
             self.learnMaxLikelihood(X, Y, esz=esz)
@@ -301,21 +309,38 @@ class IBC(object):
                     # Store the stats of the classifier as long as the CLL increases
                     prevStats = self.stats.copy()
 
-            # current minibatch
+            # Current minibatch
             mb = mb_inds[n_iter % len(mb_inds)]
-            # Compute the conditional probability
-            pY = self.getClassProbs(X[mb, :])
 
             # Update the stats
-            for i in range(size):
-                delta = np.array([1 - pY[i, y] if y == Y[mb[i]] else 0 - pY[i, y] for y in range(self.cardY)])
-                for U in self.stats.U:
-                    self.stats.Nu[U][tuple(X[mb[i], U])] += delta
+            self.logLossDescent(X[mb, :], Y[mb])
 
         if trace:
             return (np.array(evolCLL), evolStats)
         else:
             return np.array(evolCLL)
+
+    def logLossDescent(self, X, Y):
+        '''
+        This method updates self.stats according to the next rule
+
+        self.stats= self.stats + max_likel(X,Y) - max_likel(X,self.p(Y|X))
+
+        :param X: Instances
+        :param Y: Labels
+        :return: self.p(Y|X)
+        '''
+
+        m= X.shape[0]
+        pY = self.getClassProbs(X)
+
+        # Update the stats
+        for i in range(m):
+            delta = np.array([1 - pY[i, y] if y == Y[i] else 0 - pY[i, y] for y in range(self.cardY)])
+            for U in self.stats.U:
+                self.stats.Nu[U][tuple(X[i, U])] += delta
+
+        return pY
 
     def getClassProbs(self,X, stats= None):
 

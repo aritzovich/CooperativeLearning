@@ -13,7 +13,6 @@ import IBC
 import Stats
 import Stats as st
 import IBC as ibc
-import ContStats as cst
 from sklearn.manifold import MDS
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
@@ -246,14 +245,28 @@ def plot_minibatch(resFile= "results_miniBatch.csv"):
     #res.loc[res['method']== 'global',:]
     '''
 
-def initialization_effect(data, esz, alpha, b, max_iter= 50, num_rep= 10, seed= 0)
+def initialization_effect(dataName= "iris", max_iter= 50, num_rep= 10, seed= 0):
     '''
-    Analizar el efecto de la inicializacion en minibatch y en TM. La inicializacion puede combinar los parametros
-    maximo verosimiles y una inicializacion uniforme.
+    Analizar el efecto de la inicializacion en minibatch y en TM. 
+    
+    Inicializaciones:
+    -Uniforme: uniforme 
+    -Informativa: emplear parte de los datos diferentes del training
+    -Maximo verosimil: emplear el training
+    
+    Equivalent sample size de la inicializacion:
+    -Tamaño del training
+    -10 veces el training    
+    
+    Metodos:
+        Stochastic: update con cada instancia
+        Minibatch: Dos batches
+        TM: update con todas las instancias de training
+        
+    
     
     :param data: data set
-    :param esz: equivalent size of the initial statistics 
-    :param alpha: hiperparameter for the Dirichlet from which the initial statistics are obtained
+    :param esz: equivalent size of the maximum likelihood initial statistics
     :param b: number of batches of the minicath
     :param max_iter: maximum number of iterations
     :param numRep: number of repetitions of the experiment 
@@ -261,10 +274,157 @@ def initialization_effect(data, esz, alpha, b, max_iter= 50, num_rep= 10, seed= 
     :return: saves a data frame with the obtained results
     '''
 
+    #try:
+    #    res= pd.read_pickle(resFile)
+    #except:
+    res= None
 
+    D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=3)
+    X= D[:,:-1]
+    Y= D[:,-1]
+    card= np.max(X,axis=0)+1
+    cardY= np.max(Y)+1
+    m, n= X.shape
+
+    percTrain= 0.66
+
+    for seed in range(seed, seed+num_rep):
+        # Training test split
+        np.random.seed(seed)
+        perm= np.random.permutation(m)
+        m_train= int(percTrain*m)
+        trainX= X[perm[:m_train],:]
+        trainY= Y[perm[:m_train]]
+        testX= X[perm[m_train:],:]
+        testY= Y[perm[m_train:]]
+
+
+        # The classifier
+        nb_struct= IBC.getNaiveBayesStruct(n)
+        h= IBC.IBC(card,cardY)
+        h.setBNstruct(nb_struct)
+        h.initStats()
+
+        #TODO meter el equivalent sample size
+        '''
+        Equivalent sample size:
+        -Tamaño del training
+        -10 veces el training    
+        '''
+        for esz in [int(m_train/2.0), m_train, m_train*2, m_train*10]:
+
+            '''
+            Inicializaciones:
+            -Uniforme: uniforme 
+            -Informativa: emplear parte de los datos diferentes del training
+            -Maximo verosimil: emplear el training
+            '''
+
+            #TODO testar
+            initializ= ["Uniform","Validation","Training",'Tra.+Unif.']
+            Stats0= list()
+            # Uniforme
+            stats= h.stats.emptyCopy()
+            stats.initCounts(esz=esz)
+            Stats0.append(stats)
+            # Informativa
+            stats = h.stats.emptyCopy()
+            stats.maximumLikelihood(X= testX, Y=testY, esz= 1)
+            stats.setSampleSize(esz)
+            Stats0.append((stats))
+            # Maximo verosimil
+            stats = h.stats.emptyCopy()
+            stats.maximumLikelihood(X= trainX, Y=trainY, esz= 1)
+            stats.setSampleSize(esz)
+            Stats0.append((stats))
+            # Maximo verosimil
+            stats = h.stats.emptyCopy()
+            stats.maximumLikelihood(X= trainX, Y=trainY, esz= m_train)
+            stats.setSampleSize(esz)
+            Stats0.append((stats))
+
+
+            for indInit in range(len(initializ)):
+                initStats = Stats0[indInit]
+
+                '''
+                Metodos:
+                Stochastic: batch de tamaño 1
+                Minibatch: 5 y 2 batches
+                TM: todo el training
+                '''
+                method= ["stochastic","minibatch_10","minibatch_5","minibatch_2","TM"]
+                for indMethod in range(len(method)):
+
+
+                    if indMethod== 0:
+                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=1, init_stats=initStats, max_iter= max_iter, seed= seed)
+                    elif indMethod== 1:
+                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/10), init_stats=initStats, max_iter= max_iter, seed= seed)
+                    elif indMethod== 2:
+                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/5), init_stats=initStats, max_iter= max_iter, seed= seed)
+                    elif indMethod== 3:
+                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/2), init_stats=initStats, max_iter= max_iter, seed= seed)
+                    else:
+                        CLL= h.learnMinLogLoss(trainX,trainY,init_stats=initStats, max_iter= max_iter, seed= seed)
+
+                    #if len(CLL)< max_iter: CLL= np.concatenate([CLL,np.ones(max_iter-len(CLL))*CLL[-1]])
+
+                    res= res_initialization_effect(esz= esz, initializ= initializ[indInit], method= method[indMethod], CLL= CLL, data_name= dataName, m= m_train, n= n, seed= seed, res= res)
+
+
+    res.to_csv("results_initialization_"+dataName+".csv")
+
+
+def res_initialization_effect(esz, initializ, method, CLL, data_name, m, n, seed, res= None):
+    '''
+    Generate the data frame for the experiment "initialization_effect"
+
+    :param esz: Equivalent sample size of the initial statistics
+    :param initializ: Initialization type
+    :param method: Learning procedure
+    :param CLL: Evolution of the conditional likelihood
+    :param data_name: name of the data set
+    :param m: size of the data
+    :param n: number of variables
+    :param seed: random seed of the experiments
+    :param res: previous results
+    :return:
+    '''
+    if res is None:
+        res = pd.DataFrame(columns=['esz', 'init.', 'method', 'n_iter', 'CLL', 'data_name', 'm', 'n', 'seed'])
+
+    for i in range(len(CLL)):
+        res.loc[len(res)] = [esz, initializ, method, i, CLL[i], data_name, m, n, seed]
+
+    return res
+
+
+def plot_initialization_effect(dataName= "iris"):
+    resFile= "results_initialization_"+dataName+".csv"
+    res = pd.read_csv(resFile, index_col=0)
+
+
+    # Plot the responses for different events and regions
+    sbn.set_theme(style="darkgrid")
+
+    values= res['esz'].drop_duplicates().values
+    for esz in values:
+        aux = res.loc[res['esz'] == esz, :]
+
+        # Plot the responses for different events and regions
+        lineplot= sbn.lineplot(x="n_iter", y="CLL",
+                     hue="method", style="init.",
+                     data=aux)
+        lineplot.set_title(dataName+"; esz= "+str(esz))
+        plt.xscale('log')
+        plt.ylim(-0.4,-0.1)
+        plt.savefig("initialization_"+dataName + '_'+str(esz)+'.pdf', bbox_inches='tight')
+        #plt.show()
+        plt.close()
 
 
 
 if __name__ == '__main__':
-#    miniBatch()
-    plot_minibatch()
+    #initialization_effect(max_iter= 50, num_rep= 20)
+    plot_initialization_effect()
