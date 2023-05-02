@@ -236,7 +236,8 @@ class Stats(object):
 
         MWL= self.emptyCopy()
         MWL.maximumWLikelihood(X, pY, esz=esz)
-        N= X.shape[0]
+        N = MWL.getSampleSize()
+        # N= X.shape[0]
         N_ref= ref_stats.getSampleSize()
 
         self.add(ref_stats, prop=lr*N/N_ref)

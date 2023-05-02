@@ -1,5 +1,6 @@
+import Stats
 from IBC import IBC
-from network.User import User
+from network.UserSingleList import User
 import numpy as np
 
 
@@ -41,16 +42,31 @@ class Graph:
         :return: None
         """
         records = []
+        stats_g = self.user_list[0].classifier.stats.emptyCopy()
+        stats_g.uniform(self.train_data.shape[0])
+        # stats_g.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=0.1)
+        classif_mle = self.user_list[0].classifier.copy()
+        classif_mle.learnMaxLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=0.1)
         while len(self.com_queue) > 0:
-            print(f"Global Time: {self.global_time}")
+            # print(f"Global Time: {self.global_time}")
             # Get the next user from the queue
-            actual_user_ix = self.com_queue.pop()
+            # actual_user_ix = self.com_queue.pop()
+            actual_user_ix = self.com_queue[0]
+            del self.com_queue[0]
             actual_user = self.user_list[actual_user_ix]
+            if len(actual_user.stats) == 0:
+                actual_user.stats = [stats_g]
+            # if self.global_time == 1:
+            #     actual_user.stats = [stats_g]
             CLL = actual_user.compute(self.global_time, self.policy, self.train_data, test_data)
+            CLL_mle = classif_mle.CLL(self.train_data[:, :-1], self.train_data[:, -1])
             for score in CLL.keys():
                 to_insert = [self.seed, actual_user.data.shape[0], test_data.shape[0], actual_user.data.shape[0],
                              len(self.user_list), score, CLL[score], self.global_time, actual_user_ix, 1, self.policy]
                 records.append(to_insert)
+
+            records.append([self.seed, self.train_data.shape[0], self.train_data.shape[0], self.train_data.shape[0],
+                             len(self.user_list), 'ML', CLL_mle, self.global_time, '-1', 1, self.policy])
 
             self.global_time += 1  # Increment the time when the communications are made
         return records

@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import argparse
 
@@ -10,7 +12,6 @@ from network.Graph import Graph
 
 
 def main():
-    np.random.seed(10)
     parser = argparse.ArgumentParser(prog="Cooperative Learning - Bayesian Classifiers using the TM algorithm",
                                      description="This is the supporting code for the paper EMPTY. "
                                                  "Please consider citing the authors as: EMPTY.")
@@ -44,8 +45,6 @@ def main():
     g3 = parser.add_argument_group("Data", "Arguments related to Data.")
     g3.add_argument('--train_data', dest='train_data', type=str,
                     help='Train data to be used in the experiment. It will be uniformly distributed through nodes.')
-    g3.add_argument('--test_data', dest='test_data', type=str,
-                    help='Test data to be used in the experiment. It will be uniformly distributed through nodes.')
     g3.add_argument('--n_points', dest='n_points', type=int,
                     help='Number of points to be used to generate a dataset.')
     g3.add_argument('--n_variables', dest='n_variables', type=int,
@@ -62,60 +61,71 @@ def main():
     g4.add_argument('--show', dest='show_network', type=int,
                     help='Plots the graph if "1"  specified.')
 
-    args = parser.parse_args()
-
-    if not args.exec_seq_size and not args.exec_sequence:
-        raise "You need to specify either an execution sequence or a size to generate a random one"
-
-    if not args.train_data or not args.test_data:
-        train_data = generate_data_domains(domain=args.p_domain, m=args.n_points, n=args.n_variables+1, r=args.cardinality)
-        test_data = generate_data_domains(domain=args.p_domain, m=args.n_points, n=args.n_variables+1, r=args.cardinality)
-        data_name = 'generated'
-    else:
-        train_data, _ = loadSupervisedData(args.train_data, sep=',', skipHeader=0, classInd=None, maxDiscVals=5, bins=2)
-        test_data, _ = loadSupervisedData(args.train_data, sep=',', skipHeader=0, classInd=None, maxDiscVals=5, bins=2)
-        data_name = args.train_data
-
-    if args.adj_matrix:
-        adj_matrix = np.loadtxt(args.adj_matrix)
-        topology = 'Given'
-    else:
-        if args.n_users and args.max_children and args.topology:
-            adj_matrix = generate_topology(args.topology, args.n_users)
-            topology = args.topology
-        else:
-            raise "You must specify '--n_users' and '--max_children' or provide an adjacency matrix with '--adj_matrix'"
-
-    if not args.exec_sequence:
-        if args.exec_type and args.exec_seq_size:
-            exec_sequence = generate_exec_sequence(args.exec_type, args.exec_seq_size, len(adj_matrix))
-            type_sequence = args.exec_type
-        else:
-            raise "Execution sequence not provided and unable to generate one due to missing arguments."
-    else:
-        exec_sequence = args.exec_sequence
-        type_sequence = 'Given'
-
-    if args.show_network:
-        from network import Utils
-        Utils.show_graph(adj_matrix)
-
-    graph = Graph(adj_matrix, args.policy, train_data, args.structure, exec_sequence, data_domain=args.p_domain)
-    results = graph.start(test_data)
-    results = pd.DataFrame(results, columns=['seed', 'n_train', 'n_test', 'n_local_train', 'n_users',
+    results_global = pd.DataFrame(None, columns=['seed', 'n_train', 'n_test', 'n_local_train', 'n_users',
                                              'score_name', 'score', 'time', 'id_user', 'n_local_iterations', 'policy'])
-    results['data_name'] = data_name
-    results['network_topology'] = topology
-    results['type_sequence'] = type_sequence
-    results['BN_Structure'] = args.structure
+    for i in range(10):
+        print(f"Iteration: {i}")
+        np.random.seed(i)
 
-    print(results)
+        args = parser.parse_args()
 
-    results.to_csv('./results.csv', sep=',', decimal='.', index=False)
-    print("The results have been exported to: ./results.csv")
+        if not args.exec_seq_size and not args.exec_sequence:
+            raise "You need to specify either an execution sequence or a size to generate a random one"
 
-    plot_results(results)
+        if not args.train_data:
+            train_data = generate_data_domains(domain=args.p_domain, m=args.n_points, n=args.n_variables+1, r=args.cardinality)
+            data_name = 'generated'
+        else:
+            train_data, _ = loadSupervisedData(args.train_data, sep=',', skipHeader=0, classInd=None, maxDiscVals=5, bins=2)
 
+            perm = np.random.permutation(len(train_data))
+            ix = np.ceil(len(train_data) * 0.3).astype(int)
+            test_data = train_data[perm[:ix], :]
+            train_data = train_data[perm[ix:], :]
+            data_name = args.train_data
+
+        if args.adj_matrix:
+            adj_matrix = np.loadtxt(args.adj_matrix)
+            topology = 'Given'
+        else:
+            if args.n_users and args.max_children and args.topology:
+                adj_matrix = generate_topology(args.topology, args.n_users)
+                topology = args.topology
+            else:
+                raise "You must specify '--n_users' and '--max_children' or provide an adjacency matrix with '--adj_matrix'"
+
+        if not args.exec_sequence:
+            if args.exec_type and args.exec_seq_size:
+                exec_sequence = generate_exec_sequence(args.exec_type, args.exec_seq_size, len(adj_matrix))
+                type_sequence = args.exec_type
+            else:
+                raise "Execution sequence not provided and unable to generate one due to missing arguments."
+        else:
+            exec_sequence = args.exec_sequence
+            type_sequence = 'Given'
+
+        if args.show_network:
+            from network import Utils
+            Utils.show_graph(adj_matrix)
+
+        graph = Graph(adj_matrix, args.policy, train_data, args.structure, exec_sequence, data_domain=args.p_domain)
+        results = graph.start(test_data)
+        results = pd.DataFrame(results, columns=['seed', 'n_train', 'n_test', 'n_local_train', 'n_users',
+                                                 'score_name', 'score', 'time', 'id_user', 'n_local_iterations', 'policy'])
+        results['data_name'] = data_name
+        results['network_topology'] = topology
+        results['type_sequence'] = type_sequence
+        results['BN_Structure'] = args.structure
+        results_global = pd.concat([results_global, results])
+
+    print(results_global)
+
+    export_path_plots = './Results/Star5/'
+    # os.mkdir(export_path_plots)
+    results_global.to_csv(export_path_plots + 'resultsUniform.csv', sep=',', decimal='.', index=False)
+    print(f"The results have been exported to: {export_path_plots}")
+
+    plot_results(results_global, export_path=export_path_plots + 'Uniform.pdf')
 
 
 if __name__ == '__main__':
