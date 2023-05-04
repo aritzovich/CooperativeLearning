@@ -500,16 +500,16 @@ def maximumWeigtedTree(W):
 
 def getMinibatchInds(m, size, seed= None):
     '''
-    Return the list of indices for the minibatch particion of a data set of size m into subsets of the given size.
+    Return a list of list of indices for the minibatch partition of a data set of size m into subsets of the given size.
 
-    If m is not multiple of size the last batch contain repeated instances from the other minibatches at random
+    If m is not multiple of size some instances are not included in any minibatch
 
     TODO: test this procedure
 
-    :param m:
-    :param size:
-    :param seed:
-    :return:
+    :param m: number of data points
+    :param size: size of the minibatches
+    :param seed: random seed
+    :return: a list of list of indices to the data points, list(list(int))
     '''
 
     if seed:
