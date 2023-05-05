@@ -52,9 +52,9 @@ class User:
         self.stats = []
 
         # Compute the CLL
-        CLL = {'local': self.classifier.CLL(self.data[:, :-1], self.data[:, -1]),
-               'global': self.classifier.CLL(global_train_data[:, :-1], global_train_data[:, -1]),
-               'test': self.classifier.CLL(test_data[:, :-1], test_data[:, -1])}
+        CLL = {'local': self.classifier.CLL(self.data[:, :-1], self.data[:, -1], normalize=True),
+               'global': self.classifier.CLL(global_train_data[:, :-1], global_train_data[:, -1], normalize=True),
+               'test': self.classifier.CLL(test_data[:, :-1], test_data[:, -1], normalize=True)}
 
         return CLL
 
@@ -78,6 +78,7 @@ class User:
             stats_g.update(self.data[:, :-1], probs, self.stats_ref, lr=lr, esz=self.esz)
             result = stats_g
         else:
+            print("NOOOOO")
             # The received list is empty so maximum likelihood parameters
             self.classifier.learnMaxLikelihood(self.data[:, :-1], self.data[:, -1], esz=self.esz)
             result = self.classifier.stats

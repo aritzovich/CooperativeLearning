@@ -1,5 +1,5 @@
 import Stats
-from IBC import IBC
+from IBC import IBC, getMinibatchInds
 from network.UserSingleList import User
 import numpy as np
 
@@ -8,25 +8,18 @@ class Graph:
     com_queue = []
     global_time = 1
 
-    def __init__(self, adjacency_matrix, policy, data, structure, exec_sequence, split_type='uniform', data_domain=None):
-        self.seed = 10
+    def __init__(self, adjacency_matrix, policy, data, structure, exec_sequence, card_x, card_y, seed, split_type='uniform', data_domain=None):
+        self.seed = seed
         np.random.seed(self.seed)
         self.policy = policy
         self.train_data = data
-        card_x = np.array([len(np.unique(data[:, i])) for i in range(data[:, :-1].shape[1])])
-        card_y = len(np.unique(data[:, -1]))
         data_split = self.split_data(data, len(adjacency_matrix), split_type=split_type)
         # Distribute data uniformly over the nodes
-        idx = np.arange(0, data.shape[0])  # Create the index column that is going to be split
-        n_splits = len(adjacency_matrix)
-        bins = np.linspace(0, n_splits, idx.size, endpoint=False).astype(int)
-        bins = bins[idx.argsort().argsort()]
-        # for b in np.unique(bins):
-        #     self.user_list[b].data = data[bins == b, :]
+        indexes = getMinibatchInds(data.shape[0], int(data.shape[0]/len(adjacency_matrix)))
         self.user_list = [User(children=np.where(adjacency_matrix[i, :] == 1)[0].tolist(),
                                parents=np.where(adjacency_matrix[:, i] == 1)[0].tolist(),
                                classif_structure=structure,
-                               data=data[bins == i, :],
+                               data=data[indexes[i], :],
                                card_x=card_x,
                                card_y=card_y,
                                data_domain=data_domain if data_domain else None,
@@ -42,9 +35,9 @@ class Graph:
         :return: None
         """
         records = []
-        stats_g = self.user_list[0].classifier.stats.emptyCopy()
-        stats_g.uniform(self.train_data.shape[0])
-        # stats_g.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=0.1)
+        init_stat = self.user_list[0].classifier.stats.emptyCopy()
+        init_stat.uniform(self.train_data.shape[0])
+        # init_stat.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=0.1)
         classif_mle = self.user_list[0].classifier.copy()
         classif_mle.learnMaxLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=0.1)
         while len(self.com_queue) > 0:
@@ -55,11 +48,11 @@ class Graph:
             del self.com_queue[0]
             actual_user = self.user_list[actual_user_ix]
             if len(actual_user.stats) == 0:
-                actual_user.stats = [stats_g]
+                actual_user.stats = [init_stat]
             # if self.global_time == 1:
             #     actual_user.stats = [stats_g]
             CLL = actual_user.compute(self.global_time, self.policy, self.train_data, test_data)
-            CLL_mle = classif_mle.CLL(self.train_data[:, :-1], self.train_data[:, -1])
+            CLL_mle = classif_mle.CLL(self.train_data[:, :-1], self.train_data[:, -1], normalize=True)
             for score in CLL.keys():
                 to_insert = [self.seed, actual_user.data.shape[0], test_data.shape[0], actual_user.data.shape[0],
                              len(self.user_list), score, CLL[score], self.global_time, actual_user_ix, 1, self.policy]

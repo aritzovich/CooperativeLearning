@@ -76,8 +76,10 @@ def main():
             train_data = generate_data_domains(domain=args.p_domain, m=args.n_points, n=args.n_variables+1, r=args.cardinality)
             data_name = 'generated'
         else:
-            train_data, _ = loadSupervisedData(args.train_data, sep=',', skipHeader=0, classInd=None, maxDiscVals=5, bins=2)
+            train_data, card = loadSupervisedData(args.train_data, sep=',', skipHeader=0, bins=3)
 
+            card_x = card[:-1]
+            card_y = card[-1]
             perm = np.random.permutation(len(train_data))
             ix = np.ceil(len(train_data) * 0.3).astype(int)
             test_data = train_data[perm[:ix], :]
@@ -108,7 +110,7 @@ def main():
             from network import Utils
             Utils.show_graph(adj_matrix)
 
-        graph = Graph(adj_matrix, args.policy, train_data, args.structure, exec_sequence, data_domain=args.p_domain)
+        graph = Graph(adj_matrix, args.policy, train_data, args.structure, exec_sequence, data_domain=args.p_domain, card_x=card_x, card_y=card_y, seed=i)
         results = graph.start(test_data)
         results = pd.DataFrame(results, columns=['seed', 'n_train', 'n_test', 'n_local_train', 'n_users',
                                                  'score_name', 'score', 'time', 'id_user', 'n_local_iterations', 'policy'])

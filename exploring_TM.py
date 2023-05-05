@@ -426,5 +426,5 @@ def plot_initialization_effect(dataName= "iris"):
 
 
 if __name__ == '__main__':
-    #initialization_effect(max_iter= 50, num_rep= 20)
+    initialization_effect(max_iter= 50, num_rep= 20)
     plot_initialization_effect()

@@ -4,14 +4,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def show_graph(adjacency_matrix):
+def show_graph(adjacency_matrix, export_path=None):
     """
     Plots the Directed Graph using the Networkx Graph library
     """
 
     G = nx.DiGraph(adjacency_matrix)
     nx.draw_networkx(G, node_size=2000)
-    plt.show()
+    if export_path:
+        plt.savefig(export_path, format='pdf')
+    else:
+        plt.show()
+    plt.clf()
 
 
 def flatten(xs):

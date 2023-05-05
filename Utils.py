@@ -118,6 +118,7 @@ def plot_results(df, theme='darkgrid', export_path=None, title=None):
         plt.savefig(export_path, format='pdf')
     else:
         plt.show()
+    plt.clf()
 
 
 def plotParameters2D(line_id, x, y, score, savePath=None):
