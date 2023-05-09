@@ -37,10 +37,9 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
     for i in range(n):
         if i != classInd:
             vals= np.unique(text[:, i])
-            if str.isalpha(text[0, i]):
+            if str.isalpha(text[0, i]):# if all characters in the string are alphabetic or there is at least one character
                 card[i]= len(vals)
-
-            elif str.isdigit(text[0, i]):  # if all characters in the string are alphabetic or there is at least one character
+            elif isfloat(text[0, i]):# if the string is a number
                 if len(vals)<= maxDiscVals:
                     card[i] = len(vals)
                 else:
@@ -53,34 +52,44 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
         else:
             card[i]= len(np.unique(text[:,i]))
 
-    if bins is not None:
-        data = np.zeros((m,n),dtype=int)
-    else:
-        data = np.zeros((m,n),dtype=float)
 
+    varData= list()
     for i in range(n):
         if card[i]== sys.maxsize:
-            data[:,i] = np.array([float(x) for x in text[:, i]])
+            varData.append(np.array([float(x) for x in text[:, i]]))
         else:
-            data[:,i] = np.unique(text[:, i], return_inverse=True)[1]
-
+            varData.append(np.unique(text[:, i], return_inverse=True)[1])
 
     if bins is not None:
+        data = np.zeros((m,n),dtype=int)
         #Discretize continuous data using equal frequency
         for i in range(n):
             if card[i]== sys.maxsize:
-                ordered = np.sort(data[:,i])
+                ordered = np.sort(varData[i])
                 cut = [ordered[int((j + 1) * m / bins) - 1] for j in range(bins)]
                 cut[bins - 1] = ordered[m - 1]
                 for j in range(m):
                     for k in range(bins):
-                        if data[j,i] <= cut[k]:
+                        if varData[i][j] <= cut[k]:
                             break
                     data[j,i] = k
 
                 card[i]= bins
+            else:
+                data[:,i]= varData[i]
+    else:
+        data = np.zeros((m,n),dtype=float)
+        for i in range(n):
+            data[:,i]= varData[i]
 
     return data,card
+
+def isfloat(str):
+    try:
+        float(str)
+    except ValueError:
+        return False
+    return True
 
 
 def missing_value_imputation(df, imputation_type="mode", max_distinct_values=5):
