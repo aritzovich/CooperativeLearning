@@ -31,3 +31,28 @@ def flatten(xs):
             yield x
 
 
+def generate_communication_sequence(size, values, prob, prob_stability_q):
+    """
+    Generates a random communication sequence
+    :param size: Size of the output sequence
+    :param values: Values to be used in the sequence
+    :param prob: Probability of replacement in a subsequence
+    :prob_prob_stability_q: Probability of repetition a subsequence
+    """
+    L = np.array([])
+    s = _sample_sequence(values.copy(), prob)
+    while len(L) < size:
+        L = np.concatenate([L, s])
+        if np.random.rand() > prob_stability_q:
+            s = _sample_sequence(values.copy(), prob)
+    return L.astype(int).tolist()
+
+
+def _sample_sequence(values, p):
+    s = []
+    while len(s) < len(values):
+        i_val = np.random.randint(0, len(values))
+        s.append(values[i_val])
+        if p < np.random.rand():
+            del values[i_val]
+    return s

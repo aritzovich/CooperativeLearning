@@ -48,9 +48,13 @@ class Graph:
             del self.com_queue[0]
             actual_user = self.user_list[actual_user_ix]
             if len(actual_user.stats) == 0:
+                # To assign a common init_start
                 actual_user.stats = [init_stat]
-            # if self.global_time == 1:
-            #     actual_user.stats = [stats_g]
+                # To assign local ML stats
+                # ml_stats = actual_user.classifier.copy()
+                # ml_stats.learnMaxLikelihood(actual_user.data[:, :-1], actual_user.data[:, -1], esz=0.1)
+                # ml_stats = ml_stats.stats.copy()
+                # actual_user.stats = ml_stats
             CLL = actual_user.compute(self.global_time, self.policy, self.train_data, test_data)
             CLL_mle = classif_mle.CLL(self.train_data[:, :-1], self.train_data[:, -1], normalize=True)
             for score in CLL.keys():
