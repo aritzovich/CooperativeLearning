@@ -5,7 +5,8 @@ from tqdm import tqdm
 
 import pandas as pd
 from matplotlib import pyplot as plt
-import seaborn as sns
+import seaborn as sbs
+from multiprocessing import Pool
 
 from GenerateData import generate_data_domains, random_adj_generator, binarize_dataset, generate_topology, \
     generate_exec_sequence
@@ -15,8 +16,9 @@ from network.Utils import generate_communication_sequence
 
 
 def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='ordered', show_network=True,
-         base_adj_path='./data/network_definitions/', base_dataset_path='./data/', repetitions=10,
+         base_adj_path='./data/network_definitions/', base_dataset_path='./data/', repetitions=5,
          prob_repetition=[1], prob_replacement=[1]):
+
     for d in datasets:
         dpath = base_dataset_path + d
         data, card = loadSupervisedData(dpath, sep=',', skipHeader=0, bins=5)
@@ -26,7 +28,7 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
         test_data = data[perm[:ix], :]
         train_data = data[perm[ix:], :]
         for a in adj_matrices:
-            adj_path = base_adj_path + a
+            adj_path = base_adj_path + a + '.txt'
             adj_matrix = np.loadtxt(adj_path)
             for classifier in classifiers:
                 # if a == 'Scenario9.txt':
@@ -45,7 +47,7 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
 
                 for q in prob_repetition:
                     for p in prob_replacement:
-                        for rep in tqdm(range(repetitions), desc='Iteration'):
+                        for rep in tqdm(range(repetitions), desc='Iteration', ascii=True):
                             np.random.seed(rep)
 
                             user_rep = 20
@@ -53,8 +55,10 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
                             if type_com_queue == 'ordered':
                                 exec_sequence = np.ravel(np.repeat([np.arange(0, len(adj_matrix))], user_rep, axis=0)).tolist()
                             elif type_com_queue == 'perm_comb':
-                                exec_sequence = generate_exec_sequence(seq_type='perm_comb', size=n_users_exec,
-                                                                       n_users=len(adj_matrix))
+                                ref_permu = np.random.permutation(len(adj_matrix))
+                                exec_sequence = np.ravel(np.repeat([ref_permu], user_rep, axis=0)).tolist()
+                                # exec_sequence = generate_exec_sequence(seq_type='perm_comb', size=n_users_exec,
+                                #                                        n_users=len(adj_matrix))
                             elif type_com_queue == 'prob_dist':
                                 exec_sequence = np.random.choice(np.arange(0, 5), p=[0.225, 0.225, 0.1, 0.225, 0.225],
                                                                  size=n_users_exec).tolist()
@@ -69,10 +73,11 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
 
                             else:  # Random
                                 exec_sequence = np.random.randint(0, len(adj_matrix), n_users_exec)
-                                plt.hist(exec_sequence)
-                                plt.show()
-                                plt.clf()
+                                # plt.hist(exec_sequence)
+                                # plt.show()
+                                # plt.clf()
 
+                            exec_sequence_str = ','.join(str(x) for x in exec_sequence)
                             g = Graph(adj_matrix, 'info', train_data, classifier, exec_sequence, card_x=card_x, card_y=card_y,
                                       seed=rep)
                             results = g.start(test_data)
@@ -86,11 +91,11 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
                             results['BN_Structure'] = classifier
                             results['p_replace'] = p
                             results['p_repetition'] = q
-                            results['exec_sequence'] = ','.join(str(x) for x in exec_sequence)
+                            results['exec_sequence'] = exec_sequence_str
                             results_global = pd.concat([results_global, results])
 
                 # Check if the path is created
-                # results_global.to_csv(exp_path + 'resultsUniform.csv', sep=',', decimal='.', index=False)
+                results_global.to_csv(exp_path + 'resultsUniform.csv', sep=',', decimal='.', index=False)
                 print(f"The results have been exported to: {exp_path}\n")
 
 
@@ -121,18 +126,21 @@ def to_latex():
         for d in datasets:
             for classifier in classifiers:
                 exp_path = export_path + a + '/' + classifier + '/'
+                results_global = pd.read_csv(exp_path + 'resultsUniform.csv', sep=',')
+
                 out_string += f'\\section{{{a}}}'
                 out_string += '''
 \\begin{{figure}}[H] 
     \\centering\n'''.format(length='multi-line', ordinal='second')
                 # To generate the individual results
-                # out_string += f'\t\\subfloat[Network]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Network.pdf"}}}}}\\hfill\n'
-                # out_string += f'\t\\subfloat[Uniform]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Uniform.pdf"}}}}}'
-                # To generate the GRID SEARCH results
                 out_string += f'\t\\subfloat[Network]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Network.pdf"}}}}}\\hfill\n'
-                out_string += f'\t\\subfloat[Grid Search]{{\\includegraphics[width=\\textwidth]{{{exp_path + "grid.pdf"}}}}}'
+                out_string += f'\t\\subfloat[Uniform]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Uniform.pdf"}}}}}'
+                # To generate the GRID SEARCH results
+                # out_string += f'\t\\subfloat[Network]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Network.pdf"}}}}}\\hfill\n'
+                # out_string += f'\t\\subfloat[Grid Search]{{\\includegraphics[width=\\textwidth]{{{exp_path + "grid.pdf"}}}}}'
+
+                out_string += f'\\caption{{{results_global["exec_sequence"].iloc[0]}}}'
                 out_string += ''' 
-    \\caption{{Results of the experiments.}}
 \\end{{figure}}\n\n'''.format(length='multi-line', ordinal='second')
 
     out_string += '\end{document}'
@@ -147,9 +155,9 @@ def to_latex():
 
 if __name__ == '__main__':
     # Parameters
-    export_path = './Results/ExperimentsColaborative/TEST/'
-    adj_matrices = ['Scenario1.txt', 'Scenario2.txt', 'Scenario3.txt', 'Scenario4.txt', 'Scenario5.txt',
-                    'Scenario6.txt', 'Scenario7.txt', 'Scenario8.txt', 'Scenario9.txt']
+    export_path = './Results/ExperimentsColaborative/'
+    adj_matrices = ['Scenario1', 'Scenario2', 'Scenario3', 'Scenario4', 'Scenario5',
+                    'Scenario6', 'Scenario7', 'Scenario8', 'Scenario9']
     type_com_queue = 'intermediate_perm_random'
     classifiers = ['NB']
     datasets = ['iris.csv']
@@ -166,18 +174,15 @@ if __name__ == '__main__':
          prob_replacement=prob_replacement)
 
     # Plot the results
-    # for a in tqdm(adj_matrices, desc='Scenario', position=0):
-    #     for d in tqdm(datasets, desc='Dataset', position=1, leave=False):
-    #         for classifier in tqdm(classifiers, desc='Dataset', position=2, leave=False):
-    #             exp_path = export_path + a + '/' + classifier + '/'
-    #             results_global = pd.read_csv(exp_path + 'resultsUniform.csv', sep=',')
-    #             g = sns.FacetGrid(results_global, col="prob_replacement", row="prob_repetition", hue="score_name")
-    #             g.map(sns.lineplot, "time", "score")
-    #             g.savefig(exp_path + 'grid.pdf', format='pdf')
-                # g = sbn.FacetGrid(aux, col="seed", hue=color, palette=palette, col_wrap=3)
-                # g.map(sbn.scatterplot, '$N_0$', '$N_1$')
-
-                # plot_results(results_global, export_path=exp_path + 'Uniform.pdf',
-                #              title='Uniform ' + a + ' ' + classifier)
+    for a in tqdm(adj_matrices, desc='Scenario', ascii=True):
+        for d in datasets:
+            for classifier in classifiers:
+                exp_path = export_path + a + '/' + classifier + '/'
+                results_global = pd.read_csv(exp_path + 'resultsUniform.csv', sep=',')
+                # g = sbs.FacetGrid(results_global, col="prob_replacement", row="prob_repetition", hue="score_name")
+                # g.map(sbs.lineplot, "time", "score")
+                # g.savefig(exp_path + 'grid.pdf', format='pdf')
+                plot_results(results_global, export_path=exp_path + 'Uniform.pdf',
+                             title='Uniform ' + a + ' ' + classifier)
                 # plot_results(results_global, title='Uniform ' + a + ' ' + classifier)
-    # to_latex()
+    to_latex()
