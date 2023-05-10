@@ -89,7 +89,7 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
                             results['network_topology'] = a
                             results['type_sequence'] = type_com_queue
                             results['BN_Structure'] = classifier
-                            results['p_replace'] = p
+                            results['num_times'] = nt
                             results['p_repetition'] = q
                             results['exec_sequence'] = exec_sequence_str
                             results_global = pd.concat([results_global, results])
@@ -133,11 +133,11 @@ def to_latex():
 \\begin{{figure}}[H] 
     \\centering\n'''.format(length='multi-line', ordinal='second')
                 # To generate the individual results
-                out_string += f'\t\\subfloat[Network]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Network.pdf"}}}}}\\hfill\n'
-                out_string += f'\t\\subfloat[Uniform]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Uniform.pdf"}}}}}'
-                # To generate the GRID SEARCH results
                 # out_string += f'\t\\subfloat[Network]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Network.pdf"}}}}}\\hfill\n'
-                # out_string += f'\t\\subfloat[Grid Search]{{\\includegraphics[width=\\textwidth]{{{exp_path + "grid.pdf"}}}}}'
+                # out_string += f'\t\\subfloat[Uniform]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Uniform.pdf"}}}}}'
+                # To generate the GRID SEARCH results
+                out_string += f'\t\\subfloat[Network]{{\\includegraphics[width=.50\\textwidth]{{{exp_path + "Network.pdf"}}}}}\\hfill\n'
+                out_string += f'\t\\subfloat[Grid Search]{{\\includegraphics[width=\\textwidth]{{{exp_path + "grid.pdf"}}}}}'
 
                 out_string += f'\\caption{{{results_global["exec_sequence"].iloc[0]}}}'
                 out_string += ''' 
@@ -145,19 +145,20 @@ def to_latex():
 
     out_string += '\end{document}'
 
-    text_file = open("report.tex", "w")
+    text_file = open("reportUNIFORME.tex", "w")
     text_file.write(out_string)
     text_file.close()
 
-    os.system("pdflatex report.tex")
+    os.system("pdflatex reportUNIFORME.tex")
     print("The PDF has been generated in the root directory of the project.")
 
 
 if __name__ == '__main__':
     # Parameters
     export_path = './Results/ExperimentsColaborative/'
-    adj_matrices = ['Scenario1', 'Scenario2', 'Scenario3', 'Scenario4', 'Scenario5',
-                    'Scenario6', 'Scenario7', 'Scenario8', 'Scenario9']
+    # adj_matrices = ['Scenario1', 'Scenario2', 'Scenario3', 'Scenario4', 'Scenario5',
+    #                 'Scenario6', 'Scenario7', 'Scenario8', 'Scenario9']
+    adj_matrices = ['Scenario2', 'Scenario5', 'Scenario7']
     type_com_queue = 'intermediate_perm_random'
     classifiers = ['NB']
     datasets = ['iris.csv']
@@ -165,24 +166,24 @@ if __name__ == '__main__':
     num_times = [1, 2, 4]
 
     # Run the experiment
-    main(export_path=export_path,
-         adj_matrices=adj_matrices,
-         classifiers=classifiers,
-         datasets=datasets,
-         type_com_queue=type_com_queue,
-         prob_repetition=prob_repetition,
-         num_times=num_times)
-
-    # Plot the results
-    for a in tqdm(adj_matrices, desc='Scenario', ascii=True):
-        for d in datasets:
-            for classifier in classifiers:
-                exp_path = export_path + a + '/' + classifier + '/'
-                results_global = pd.read_csv(exp_path + 'resultsUniform.csv', sep=',')
-                # g = sbs.FacetGrid(results_global, col="prob_replacement", row="prob_repetition", hue="score_name")
-                # g.map(sbs.lineplot, "time", "score")
-                # g.savefig(exp_path + 'grid.pdf', format='pdf')
-                plot_results(results_global, export_path=exp_path + 'Uniform.pdf',
-                             title='Uniform ' + a + ' ' + classifier)
-                # plot_results(results_global, title='Uniform ' + a + ' ' + classifier)
+    # main(export_path=export_path,
+    #      adj_matrices=adj_matrices,
+    #      classifiers=classifiers,
+    #      datasets=datasets,
+    #      type_com_queue=type_com_queue,
+    #      prob_repetition=prob_repetition,
+    #      num_times=num_times)
+    #
+    # # Plot the results
+    # for a in tqdm(adj_matrices, desc='Scenario', ascii=True):
+    #     for d in datasets:
+    #         for classifier in classifiers:
+    #             exp_path = export_path + a + '/' + classifier + '/'
+    #             results_global = pd.read_csv(exp_path + 'resultsUniform.csv', sep=',')
+    #             g = sbs.FacetGrid(results_global, col="num_times", row="p_repetition", hue="score_name")
+    #             g.map(sbs.lineplot, "time", "score")
+    #             g.savefig(exp_path + 'grid.pdf', format='pdf')
+    #             # plot_results(results_global, export_path=exp_path + 'Uniform.pdf',
+    #             #              title='Uniform ' + a + ' ' + classifier)
+    #             # plot_results(results_global, title='Uniform ' + a + ' ' + classifier)
     to_latex()

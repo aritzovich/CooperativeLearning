@@ -8,8 +8,9 @@ class Graph:
     com_queue = []
     global_time = 1
 
-    def __init__(self, adjacency_matrix, policy, data, structure, exec_sequence, card_x, card_y, seed, split_type='uniform', data_domain=None):
+    def __init__(self, adjacency_matrix, policy, data, structure, exec_sequence, card_x, card_y, seed, split_type='uniform', data_domain=None, esz=0.1):
         self.seed = seed
+        self.esz = esz
         np.random.seed(self.seed)
         self.policy = policy
         self.train_data = data
@@ -23,7 +24,8 @@ class Graph:
                                card_x=card_x,
                                card_y=card_y,
                                data_domain=data_domain if data_domain else None,
-                               identifier=i)
+                               identifier=i,
+                               esz=self.esz)
                           for i in range(len(adjacency_matrix))]
         self.fill_children()
         self.adjacency_matrix = adjacency_matrix  # Rows => FROM, Columns => TO
@@ -36,11 +38,10 @@ class Graph:
         """
         records = []
         init_stat = self.user_list[0].classifier.stats.emptyCopy()
-        esz = 0.1
-        init_stat.uniform(self.train_data.shape[0] + esz)
-        # init_stat.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=esz)
+        init_stat.uniform(self.train_data.shape[0] + self.esz)
+        # init_stat.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=self.esz)
         classif_mle = self.user_list[0].classifier.copy()
-        classif_mle.learnMaxLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=esz)
+        classif_mle.learnMaxLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=self.esz)
         while len(self.com_queue) > 0:
             # print(f"Global Time: {self.global_time}")
             # Get the next user from the queue
@@ -50,11 +51,11 @@ class Graph:
             actual_user = self.user_list[actual_user_ix]
             if len(actual_user.stats) == 0:
                 # To assign a common init_start
-                # actual_user.stats = [init_stat]
-                # To assign local ML stats
-                init_stat = actual_user.stats_ref.copy()
-                init_stat.setSampleSize(len(self.train_data.shape[0] + esz))
                 actual_user.stats = [init_stat]
+                # To assign local ML stats
+                # init_stat = actual_user.stats_ref.copy()
+                # init_stat.setSampleSize(self.train_data.shape[0] + self.esz)
+                # actual_user.stats = [init_stat]
             CLL = actual_user.compute(self.global_time, self.policy, self.train_data, test_data)
             CLL_mle = classif_mle.CLL(self.train_data[:, :-1], self.train_data[:, -1], normalize=True)
             for score in CLL.keys():
