@@ -162,7 +162,7 @@ if __name__ == '__main__':
     classifiers = ['NB']
     datasets = ['iris.csv']
     prob_repetition = [0, 0.5, 1]
-    prob_replacement = [0, 0.5, 1]
+    prob_replacement = [1, 2, 4]
 
     # Run the experiment
     main(export_path=export_path,

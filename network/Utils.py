@@ -45,14 +45,8 @@ def generate_communication_sequence(size, values, prob, prob_stability_q):
         L = np.concatenate([L, s])
         if np.random.rand() > prob_stability_q:
             s = _sample_sequence(values.copy(), prob)
-    return L.astype(int).tolist()
+    return L[:size].astype(int).tolist()
 
 
-def _sample_sequence(values, p):
-    s = []
-    while len(s) < len(values):
-        i_val = np.random.randint(0, len(values))
-        s.append(values[i_val])
-        if p < np.random.rand():
-            del values[i_val]
-    return s
+def _sample_sequence(num_nodes, num_times):
+    return np.concatenate([[i for i in range(num_nodes)] for j in range(num_times)])[np.random.permutation(num_nodes* num_times)]
