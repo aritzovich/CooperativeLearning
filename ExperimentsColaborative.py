@@ -17,7 +17,7 @@ from network.Utils import generate_communication_sequence
 
 def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='ordered', show_network=True,
          base_adj_path='./data/network_definitions/', base_dataset_path='./data/', repetitions=5,
-         prob_repetition=[1], prob_replacement=[1]):
+         prob_repetition=[1], num_times=[1]):
 
     for d in datasets:
         dpath = base_dataset_path + d
@@ -46,7 +46,7 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
                     Utils.show_graph(adj_matrix, export_path=exp_path + 'Network.pdf')
 
                 for q in prob_repetition:
-                    for p in prob_replacement:
+                    for nt in num_times:
                         for rep in tqdm(range(repetitions), desc='Iteration', ascii=True):
                             np.random.seed(rep)
 
@@ -67,8 +67,8 @@ def main(export_path, adj_matrices, classifiers, datasets, type_com_queue='order
                                 plt.clf()
                             elif type_com_queue == 'intermediate_perm_random':
                                 exec_sequence = generate_communication_sequence(size=n_users_exec,
-                                                                                values=np.arange(0, len(adj_matrix)).tolist(),
-                                                                                prob=p,
+                                                                                num_nodes=len(adj_matrix),
+                                                                                num_times=nt,
                                                                                 prob_stability_q=q)
 
                             else:  # Random
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     classifiers = ['NB']
     datasets = ['iris.csv']
     prob_repetition = [0, 0.5, 1]
-    prob_replacement = [1, 2, 4]
+    num_times = [1, 2, 4]
 
     # Run the experiment
     main(export_path=export_path,
@@ -171,7 +171,7 @@ if __name__ == '__main__':
          datasets=datasets,
          type_com_queue=type_com_queue,
          prob_repetition=prob_repetition,
-         prob_replacement=prob_replacement)
+         num_times=num_times)
 
     # Plot the results
     for a in tqdm(adj_matrices, desc='Scenario', ascii=True):

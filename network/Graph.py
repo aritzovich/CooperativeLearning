@@ -36,10 +36,11 @@ class Graph:
         """
         records = []
         init_stat = self.user_list[0].classifier.stats.emptyCopy()
-        init_stat.uniform(self.train_data.shape[0])
-        # init_stat.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=0.1)
+        esz = 0.1
+        init_stat.uniform(self.train_data.shape[0] + esz)
+        # init_stat.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=esz)
         classif_mle = self.user_list[0].classifier.copy()
-        classif_mle.learnMaxLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=0.1)
+        classif_mle.learnMaxLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=esz)
         while len(self.com_queue) > 0:
             # print(f"Global Time: {self.global_time}")
             # Get the next user from the queue
@@ -49,9 +50,11 @@ class Graph:
             actual_user = self.user_list[actual_user_ix]
             if len(actual_user.stats) == 0:
                 # To assign a common init_start
-                actual_user.stats = [init_stat]
+                # actual_user.stats = [init_stat]
                 # To assign local ML stats
-                # actual_user.stats = [actual_user.stats_ref.copy()]
+                init_stat = actual_user.stats_ref.copy()
+                init_stat.setSampleSize(len(self.train_data.shape[0] + esz))
+                actual_user.stats = [init_stat]
             CLL = actual_user.compute(self.global_time, self.policy, self.train_data, test_data)
             CLL_mle = classif_mle.CLL(self.train_data[:, :-1], self.train_data[:, -1], normalize=True)
             for score in CLL.keys():
