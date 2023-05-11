@@ -43,7 +43,11 @@ class User:
         """
 
         # Do the average
-        stats_averaged = Stats.average(self.stats)
+        if len(self.stats) == 0:
+            stats_averaged = self.classifier.stats
+        else:
+            stats_averaged = Stats.average(self.stats)
+
         result = self.expectation(global_time, expectation_statistics=stats_averaged)
         self.classifier.setStats(result)
 
