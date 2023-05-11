@@ -285,6 +285,9 @@ class IBC(object):
             # check if at least m instances have been used: "size" number of instances por each iteration
             if (n_iter % len(mb_inds) ==0) and n_iter>0:
                 actCLL= self.CLL(X, Y, normalize=True)
+                if actCLL>0:
+                    self.CLL(X, Y, normalize=True)
+                    #TODO lo de las verosimilitudes positivas (no puede ser)
 
                 if not fixed_mb:
                     # Get the indices of the minibatch particion

@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import sklearn as sk
 
+from alive_progress import alive_bar; import time;
+
 import IBC
 import Stats
 import Stats as st
@@ -20,6 +22,7 @@ import seaborn as sbn
 import Utils as utl
 import itertools as itr
 from sklearn.manifold import MDS
+from tqdm import tqdm
 
 def boostrap():
     '''
@@ -279,16 +282,16 @@ def initialization_effect(dataName= "iris", max_iter= 50, num_rep= 10, seed= 0):
     #except:
     res= None
 
-    D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=3)
+    D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=0, bins=3)
     X= D[:,:-1]
     Y= D[:,-1]
     card= np.max(X,axis=0)+1
     cardY= np.max(Y)+1
     m, n= X.shape
 
-    percTrain= 0.66
+    percTrain= 0.7
 
-    for seed in range(seed, seed+num_rep):
+    for seed in tqdm(range(seed, seed+num_rep)):
         # Training test split
         np.random.seed(seed)
         perm= np.random.permutation(m)
@@ -311,66 +314,92 @@ def initialization_effect(dataName= "iris", max_iter= 50, num_rep= 10, seed= 0):
         -Tamaño del training
         -10 veces el training    
         '''
-        for esz in [int(m_train/2.0), m_train, m_train*2, m_train*10]:
-
-            '''
-            Inicializaciones:
-            -Uniforme: uniforme 
-            -Informativa: emplear parte de los datos diferentes del training
-            -Maximo verosimil: emplear el training
-            '''
-
-            #TODO testar
-            initializ= ["Uniform","Validation","Training",'Tra.+Unif.']
-            Stats0= list()
-            # Uniforme
-            stats= h.stats.emptyCopy()
-            stats.initCounts(esz=esz)
-            Stats0.append(stats)
-            # Informativa
-            stats = h.stats.emptyCopy()
-            stats.maximumLikelihood(X= testX, Y=testY, esz= 1)
-            stats.setSampleSize(esz)
-            Stats0.append((stats))
-            # Maximo verosimil
-            stats = h.stats.emptyCopy()
-            stats.maximumLikelihood(X= trainX, Y=trainY, esz= 1)
-            stats.setSampleSize(esz)
-            Stats0.append((stats))
-            # Maximo verosimil
-            stats = h.stats.emptyCopy()
-            stats.maximumLikelihood(X= trainX, Y=trainY, esz= m_train)
-            stats.setSampleSize(esz)
-            Stats0.append((stats))
-
-
-            for indInit in range(len(initializ)):
-                initStats = Stats0[indInit]
-
+        with alive_bar(100) as bar:
+            for esz in tqdm([int(m_train/2.0), m_train, m_train*2, m_train*10]):
+                bar()
                 '''
-                Metodos:
-                Stochastic: batch de tamaño 1
-                Minibatch: 5 y 2 batches
-                TM: todo el training
+                Inicializaciones:
+                -Uniforme: uniforme 
+                -Informativa: emplear parte de los datos diferentes del training
+                -Maximo verosimil: emplear el training
                 '''
-                method= ["stochastic","minibatch_10","minibatch_5","minibatch_2","TM"]
-                for indMethod in range(len(method)):
+
+                #TODO testar
+                initializ= ["Uniform","Training"]#["Uniform","Validation","Training","Tra.+Unif."]
+                Stats0= list()
+                # Uniforme
+                if "Uniform" in initializ:
+                    stats= h.stats.emptyCopy()
+                    stats.initCounts(esz=esz)
+                    Stats0.append(stats)
+                # Informativa
+                if "Validation" in initializ:
+                    stats = h.stats.emptyCopy()
+                    stats.maximumLikelihood(X= testX, Y=testY, esz= 1)
+                    stats.setSampleSize(esz)
+                    Stats0.append((stats))
+                # Maximo verosimil
+                if "Training" in initializ:
+                    stats = h.stats.emptyCopy()
+                    stats.maximumLikelihood(X= trainX, Y=trainY, esz= 1)
+                    stats.setSampleSize(esz)
+                    Stats0.append((stats))
+                # Maximo verosimil
+                if "Tra.+Unif." in initializ:
+                    stats = h.stats.emptyCopy()
+                    stats.maximumLikelihood(X= trainX, Y=trainY, esz= m_train)
+                    stats.setSampleSize(esz)
+                    Stats0.append((stats))
 
 
-                    if indMethod== 0:
-                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=1, init_stats=initStats, max_iter= max_iter, seed= seed)
-                    elif indMethod== 1:
-                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/10), init_stats=initStats, max_iter= max_iter, seed= seed)
-                    elif indMethod== 2:
-                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/5), init_stats=initStats, max_iter= max_iter, seed= seed)
-                    elif indMethod== 3:
-                        CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/2), init_stats=initStats, max_iter= max_iter, seed= seed)
-                    else:
-                        CLL= h.learnMinLogLoss(trainX,trainY,init_stats=initStats, max_iter= max_iter, seed= seed)
+                for indInit in range(len(initializ)):
+                    initStats = Stats0[indInit]
 
-                    #if len(CLL)< max_iter: CLL= np.concatenate([CLL,np.ones(max_iter-len(CLL))*CLL[-1]])
+                    '''
+                    Metodos:
+                    Stochastic: batch de tamaño 1
+                    Minibatch: 5 y 2 batches
+                    TM: todo el training
+                    '''
+                    methods= ["stochastic","minibatch_5","minibatch_5_fixed","TM"] #["stochastic","minibatch_10","minibatch_5","minibatch_2","TM"]
+                    for method in methods:
 
-                    res= res_initialization_effect(esz= esz, initializ= initializ[indInit], method= method[indMethod], CLL= CLL, data_name= dataName, m= m_train, n= n, seed= seed, res= res)
+                        if method== "stochastic":
+                            CLL= h.learnMinLogLoss(trainX,trainY,mb_size=1, init_stats=initStats, max_iter= max_iter, seed= seed)
+                        elif method=="minibatch_10":
+                            CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/10), init_stats=initStats, max_iter= max_iter, seed= seed)
+                        elif method == "minibatch_5":
+                            CLL = h.learnMinLogLoss(trainX, trainY, mb_size=int(m_train / 5), init_stats=initStats, max_iter=max_iter, seed=seed)
+                        elif method == "minibatch_5_fixed":
+                            CLL = h.learnMinLogLoss(trainX, trainY, mb_size=int(m_train / 5), fixed_mb=True, init_stats=initStats, max_iter=max_iter, seed=seed)
+                        elif method== "minibatch_2":
+                            CLL= h.learnMinLogLoss(trainX,trainY,mb_size=int(m_train/2), init_stats=initStats, max_iter= max_iter, seed= seed)
+                        elif method== "TM":
+                            CLL= h.learnMinLogLoss(trainX,trainY,init_stats=initStats, max_iter= max_iter, seed= seed)
+
+                        if len(CLL)< max_iter: print(method+" stops at iteration "+str(len(CLL))+"/"+str(max_iter))
+
+                        if np.max(CLL)>= 0:
+                            if method == "stochastic":
+                                CLL = h.learnMinLogLoss(trainX, trainY, mb_size=1, init_stats=initStats,
+                                                        max_iter=max_iter, seed=seed)
+                            elif method == "minibatch_10":
+                                CLL = h.learnMinLogLoss(trainX, trainY, mb_size=int(m_train / 10), init_stats=initStats,
+                                                        max_iter=max_iter, seed=seed)
+                            elif method == "minibatch_5":
+                                CLL = h.learnMinLogLoss(trainX, trainY, mb_size=int(m_train / 5), init_stats=initStats,
+                                                        max_iter=max_iter, seed=seed)
+                            elif method == "minibatch_5_fixed":
+                                CLL = h.learnMinLogLoss(trainX, trainY, mb_size=int(m_train / 5), fixed_mb=True,
+                                                        init_stats=initStats, max_iter=max_iter, seed=seed)
+                            elif method == "minibatch_2":
+                                CLL = h.learnMinLogLoss(trainX, trainY, mb_size=int(m_train / 2), init_stats=initStats,
+                                                        max_iter=max_iter, seed=seed)
+                            elif method == "TM":
+                                CLL = h.learnMinLogLoss(trainX, trainY, init_stats=initStats, max_iter=max_iter,
+                                                        seed=seed)
+
+                        res= res_initialization_effect(esz= esz, initializ= initializ[indInit], method= method, CLL= CLL, data_name= dataName, m= m_train, n= n, seed= seed, res= res)
 
 
     res.to_csv("results_initialization_"+dataName+".csv")
@@ -395,7 +424,7 @@ def res_initialization_effect(esz, initializ, method, CLL, data_name, m, n, seed
         res = pd.DataFrame(columns=['esz', 'init.', 'method', 'n_iter', 'CLL', 'data_name', 'm', 'n', 'seed'])
 
     for i in range(len(CLL)):
-        res.loc[len(res)] = [esz, initializ, method, i, CLL[i], data_name, m, n, seed]
+        res.loc[len(res)] = [esz, initializ, method, i+1, CLL[i], data_name, m, n, seed]
 
     return res
 
@@ -412,13 +441,16 @@ def plot_initialization_effect(dataName= "iris"):
     for esz in values:
         aux = res.loc[res['esz'] == esz, :]
 
+
         # Plot the responses for different events and regions
         lineplot= sbn.lineplot(x="n_iter", y="CLL",
                      hue="method", style="init.",
                      data=aux)
         lineplot.set_title(dataName+"; esz= "+str(esz))
         plt.xscale('log')
-        plt.ylim(-0.4,-0.1)
+
+        min, max = np.percentile(aux["CLL"].to_numpy(), [20, 99])
+        plt.ylim(min,max)
         plt.savefig("initialization_"+dataName + '_'+str(esz)+'.pdf', bbox_inches='tight')
         #plt.show()
         plt.close()
@@ -426,5 +458,5 @@ def plot_initialization_effect(dataName= "iris"):
 
 
 if __name__ == '__main__':
-    initialization_effect(max_iter= 50, num_rep= 20)
+    initialization_effect(max_iter= 50, num_rep= 50)
     plot_initialization_effect()

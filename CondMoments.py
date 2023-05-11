@@ -197,7 +197,7 @@ class CondMoments(object):
 
         self = self - lr · (max_likel_stats(X,pY) - len(X)/esz(ref_stats) * ref_stats)
 
-        ref_stats are rescaled have the sample size of X. Thus, the update does not change the sample size of self
+        ref_stats are rescaled to have the sample size of X. Thus, the update does not change the sample size of self
 
         :param X: Unsupervised data
         :param pY: probability of the class for the samples X

@@ -360,7 +360,7 @@ class Stats(object):
         return np.concatenate([np.concatenate([Nu.flatten() for Nu in self.Nu.values()]),
                                np.array(np.sum(next(iter(self.Nu.values())))).flatten()])
 
-    def checkConsistency(self):
+    def checkConsistency(self, correction= True):
         '''
         It checks the consistency of the statistics:
         - Non-negative counts
@@ -371,19 +371,34 @@ class Stats(object):
         '''
 
         consistent= True
-
+        maxCorrection= 0
         # All the count have to be greater than zero
         for U in self.U:
-            if np.any(self.Nu[U]<0):
-                print("INCONSISTENT Nu stats: negative counts")
-                consistent= False
-                break
+            min= np.min(self.Nu[U])
+            if min<0:
+                consistent = False
+                if correction:
+                    correction= -min* np.prod(self.Nu[U].shape)
+                    print("CORRECTED Nv stats: negative counts")
+                    maxCorrection= np.max([maxCorrection,correction])
+                else:
+                    print("INCONSISTENT Nv stats: negative counts")
+                    break
 
-        for V in self.V:
-            if np.any(self.Nv[V]<0):
-                print("INCONSISTENT Nv stats: negative counts")
-                consistent= False
-                break
+
+        if correction and not consistent:
+            esz= self.getSampleSize()
+            correctionStat= self.emptyCopy()
+            correctionStat.uniform(maxCorrection*(1.1))#+1 avoid zero statistics
+            self.add(correctionStat)
+            self.setSampleSize(esz)
+            consistent= self.checkConsistency()
+
+        #for V in self.V:
+        #    if np.any(self.Nv[V]<0):
+        #        print("INCONSISTENT Nv stats: negative counts")
+        #        consistent= False
+        #        break
 
         # All the counts have to sum the same
         if self.U:
