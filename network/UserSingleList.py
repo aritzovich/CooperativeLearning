@@ -1,3 +1,5 @@
+import numpy as np
+
 import IBC
 import Stats
 
@@ -17,6 +19,7 @@ class User:
         self.classifier = IBC.IBC(self.card_x, self.card_y)
         self.classifier_structure = classif_structure
         self.esz = esz
+        self.initialized = False
         m, n = data.shape
         if classif_structure == "NB":
             nb = IBC.getNaiveBayesStruct(n - 1)
@@ -56,11 +59,18 @@ class User:
         self.stats = []
 
         # Compute the CLL
-        CLL = {'local': self.classifier.CLL(self.data[:, :-1], self.data[:, -1], normalize=True),
-               'global': self.classifier.CLL(global_train_data[:, :-1], global_train_data[:, -1], normalize=True),
-               'test': self.classifier.CLL(test_data[:, :-1], test_data[:, -1], normalize=True)}
-
-        return CLL
+        results = {'CLL_local': self.classifier.CLL(self.data[:, :-1], self.data[:, -1], normalize=True),
+                   'CLL_global': self.classifier.CLL(global_train_data[:, :-1], global_train_data[:, -1],
+                                                     normalize=True),
+                   'CLL_test': self.classifier.CLL(test_data[:, :-1], test_data[:, -1], normalize=True),
+                   'logloss_local': self.classifier.error(self.data[:, :-1], self.data[:, -1],
+                                                          deterministic=False),
+                   'logloss_global': self.classifier.error(global_train_data[:, :-1], global_train_data[:, -1],
+                                                           deterministic=False),
+                   'logloss_test': self.classifier.error(test_data[:, :-1], test_data[:, -1],
+                                                         deterministic=False)
+                   }
+        return results
 
     def expectation(self, global_time, expectation_statistics, lr=1):
         """
@@ -79,7 +89,14 @@ class User:
             # Compute the stats(X,stats_g) with the global
             self.classifier.setStats(stats_g)  # Update the current classifier with stats_g
             probs = self.classifier.getClassProbs(self.data[:, :-1])
+            # acc = 0
+            # for i, c in enumerate(self.data[:, -1]):
+            #     acc += 1 - probs[i, c]
+            # acc /= self.data.shape[0]
+            # print(f"Inercia: {acc}")
+
             stats_g.update(self.data[:, :-1], probs, self.stats_ref, lr=lr, esz=self.esz)
+            stats_g.checkConsistency()
             result = stats_g
         else:
             print("NOOOOO")
@@ -95,5 +112,6 @@ class User:
         :param stats: Received statistics
         :return: None
         """
+        self.initialized = True
         self.stats.append(stats)
 

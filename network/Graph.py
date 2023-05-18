@@ -31,41 +31,51 @@ class Graph:
         self.adjacency_matrix = adjacency_matrix  # Rows => FROM, Columns => TO
         self.com_queue = exec_sequence
 
-    def start(self, test_data):
+    def start(self, test_data, initialize_stats='uniform'):
         """
         Initial function to start the iterative algorithm
-        :return: None
+        :param test_data: Test data that is used to test the algorithm
+        :param initialize_stats: How the statistics of the nodes are initialized. Either "uniform" or "ML_local"
+        :return: An array with the results
         """
         records = []
-        init_stat = self.user_list[0].classifier.stats.emptyCopy()
-        init_stat.uniform(self.train_data.shape[0] + self.esz)
+        if initialize_stats == 'uniform':
+            init_stat = self.user_list[0].classifier.stats.emptyCopy()
+            init_stat.uniform(self.train_data.shape[0] + self.esz)
         # init_stat.maximumLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=self.esz)
         classif_mle = self.user_list[0].classifier.copy()
         classif_mle.learnMaxLikelihood(self.train_data[:, :-1], self.train_data[:, -1], esz=self.esz)
         while len(self.com_queue) > 0:
             # print(f"Global Time: {self.global_time}")
             # Get the next user from the queue
-            # actual_user_ix = self.com_queue.pop()
             actual_user_ix = self.com_queue[0]
             del self.com_queue[0]
             actual_user = self.user_list[actual_user_ix]
-            if len(actual_user.stats) == 0:
-                # To assign a common init_start
+            if not actual_user.initialized:
+                if initialize_stats == 'ML_local':
+                    init_stat = actual_user.stats_ref.copy()
+                    init_stat.setSampleSize(self.train_data.shape[0] + self.esz)
                 actual_user.stats = [init_stat]
-                # To assign local ML stats
-                # init_stat = actual_user.stats_ref.copy()
-                # init_stat.setSampleSize(self.train_data.shape[0] + self.esz)
-                # actual_user.stats = [init_stat]
-            CLL = actual_user.compute(self.global_time, self.policy, self.train_data, test_data)
+            results = actual_user.compute(self.global_time, self.policy, self.train_data, test_data)
             CLL_mle = classif_mle.CLL(self.train_data[:, :-1], self.train_data[:, -1], normalize=True)
-            for score in CLL.keys():
+            logloss_error_mle = classif_mle.error(self.train_data[:, :-1], self.train_data[:, -1], deterministic=False)
+            CLL_mle_test = classif_mle.CLL(test_data[:, :-1], test_data[:, -1], normalize=True)
+            logloss_error_mle_test = classif_mle.error(test_data[:, :-1], test_data[:, -1], deterministic=False)
+            for score in results.keys():
                 to_insert = [self.seed, actual_user.data.shape[0], test_data.shape[0], actual_user.data.shape[0],
-                             len(self.user_list), score, CLL[score], self.global_time, actual_user_ix, 1, self.policy]
+                             len(self.user_list), score, results[score], self.global_time, actual_user_ix, 1, self.policy]
                 records.append(to_insert)
 
             records.append([self.seed, self.train_data.shape[0], self.train_data.shape[0], self.train_data.shape[0],
-                             len(self.user_list), 'ML', CLL_mle, self.global_time, '-1', 1, self.policy])
-
+                             len(self.user_list), 'CLL_ML_TRAIN', CLL_mle, self.global_time, '-1', 1, self.policy])
+            records.append([self.seed, self.train_data.shape[0], self.train_data.shape[0], self.train_data.shape[0],
+                            len(self.user_list), 'logloss_ML_TRAIN', logloss_error_mle, self.global_time, '-1', 1, self.policy])
+            # This is ML_Test
+            records.append([self.seed, test_data.shape[0], test_data.shape[0], test_data.shape[0],
+                             len(self.user_list), 'CLL_ML_TEST', CLL_mle_test, self.global_time, '-2', 1, self.policy])
+            records.append([self.seed, test_data.shape[0], test_data.shape[0], test_data.shape[0],
+                            len(self.user_list), 'logloss_ML_TEST', logloss_error_mle_test, self.global_time,
+                            '-2', 1, self.policy])
             self.global_time += 1  # Increment the time when the communications are made
         return records
 
