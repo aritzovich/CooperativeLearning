@@ -44,11 +44,12 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
                     card[i] = len(vals)
                 else:
                     card[i] = sys.maxsize
-            else:
-                if len(vals) <= maxDiscVals:
-                    card[i] = len(vals)
-                else:
-                    card[i] = sys.maxsize
+            else:#Son categoricos
+                card[i] = len(vals)
+#                if len(vals) <= maxDiscVals:
+#                    card[i] = len(vals)
+#                else:
+#                    card[i] = sys.maxsize
         else:
             card[i]= len(np.unique(text[:,i]))
 

@@ -401,7 +401,7 @@ class IBC(object):
             self.stats= IBC_stats
 
         if deterministic:
-            return np.sum(np.argmax(self.getClassProbs(X), axis=1) == Y) / m
+            return 1 - (np.sum(np.argmax(self.getClassProbs(X), axis=1) == Y) / m)
         else:
             return np.sum(1 - self.getClassProbs(X)[range(m), Y])/m
 

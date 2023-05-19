@@ -16,6 +16,8 @@ from sklearn.manifold import MDS
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 import seaborn as sbn
+
+import Utils
 import Utils as utl
 
 
@@ -250,6 +252,8 @@ def generateData(domain= "ParSum", m=10, n=5, r= 4):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+
+    Utils.loadSupervisedData("./data/breast-cancer.csv")
 
     TM_VS_DEF()
 
