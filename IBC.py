@@ -316,18 +316,21 @@ class IBC(object):
             mb = mb_inds[n_iter % len(mb_inds)]
 
             # Update the stats
-            self.logLossDescent(X[mb, :], Y[mb])
+            self.discriminUpdate(X[mb, :], Y[mb])
 
         if trace:
             return (np.array(evolCLL), evolStats)
         else:
             return np.array(evolCLL)
 
-    def logLossDescent(self, X, Y):
+    def discriminUpdate(self, X, Y, determ= False):
         '''
-        This method updates self.stats according to the next rule
+        This method updates self.stats according to the next discriminative updating rule
 
-        self.stats= self.stats + max_likel(X,Y) - max_likel(X,self.p(Y|X))
+        0-1 loss probabilistic classifier (determ= False)
+        - self.stats= self.stats + max_likel(X,Y) - max_likel(X,self.p(Y|X))
+        0-1 loss deterministic classifier (determ= True)
+        - self.stats= self.stats + max_likel(X,Y) - max_likel(X,arg max_y self.p(Y|X))
 
         :param X: Instances
         :param Y: Labels
@@ -339,7 +342,10 @@ class IBC(object):
 
         # Update the stats
         for i in range(m):
-            delta = np.array([1 - pY[i, y] if y == Y[i] else 0 - pY[i, y] for y in range(self.cardY)])
+            if determ:
+                delta = np.array([1 - y== np.argmax(pY[i,:]) if y == Y[i] else 0 - y== np.argmax(pY[i,:]) for y in range(self.cardY)])
+            else:
+                delta = np.array([1 - pY[i, y] if y == Y[i] else 0 - pY[i, y] for y in range(self.cardY)])
             for U in self.stats.U:
                 self.stats.Nu[U][tuple(X[i, U])] += delta
 

@@ -217,11 +217,14 @@ class Stats(object):
             else:
                 self.Nv.update({S: -stats.Nv[S] * prop})
 
-    def update(self, X, pY, ref_stats, lr=1.0, esz= 0):
+    def update(self, X, pY, ref_stats, lr=1.0, esz= 0, determ= False):
         '''
-        This method update the statistics according to:
+        This method update the statistics according to the next rule:
 
+        For probabilistic classifiers (discrim= False - default)
         self = self - lr · (max_likel_stats(X,pY) - ref_stats)
+        For deterministic classifiers (discrim= True=
+        self = self - lr · (max_likel_stats(X,arg max_y pY) - ref_stats)
 
         , where ref_stats are scaled to the sample size of X.
 
@@ -235,9 +238,12 @@ class Stats(object):
         '''
 
         MWL= self.emptyCopy()
-        MWL.maximumWLikelihood(X, pY, esz=esz)
+        if determ:
+            MWL.maximumLikelihood(X, np.argmax(pY,axis=1), esz= esz)
+        else:
+            MWL.maximumWLikelihood(X, pY, esz=esz)
+
         N = MWL.getSampleSize()
-        # N= X.shape[0]
         N_ref= ref_stats.getSampleSize()
 
         self.add(ref_stats, prop=lr*N/N_ref)

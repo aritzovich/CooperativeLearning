@@ -51,7 +51,7 @@ def generate_communication_sequence(size, num_nodes, num_times, prob_stability_q
 def _sample_sequence(num_nodes, num_times):
     return np.concatenate([[i for i in range(num_nodes)] for j in range(num_times)])[np.random.permutation(num_nodes* num_times)]
 
-def kruskal(self, n, E=None, W=None):
+def kruskal(self, n, E=None, W=None, seed= None):
     '''
     Kruskal's algorithm (for maximization)
     Complexity O(|E|log n)
@@ -61,6 +61,9 @@ def kruskal(self, n, E=None, W=None):
 
     return a list of edges representing a forest, list((u,v))
     '''
+
+    if seed is not None:
+        np.random.seed(seed)
 
     tree = list()
     treeW = list()
