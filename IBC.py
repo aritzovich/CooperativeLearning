@@ -152,6 +152,17 @@ class IBC(object):
         self.initStats()
         self.stats.maximumLikelihood(X, Y, esz=esz)
 
+    def learnMaxWLikelihood(self, X, pY, esz= 0):
+        '''
+
+        :param X: the features
+        :param Y: the class
+        :return:
+        '''
+
+        self.initStats()
+        self.stats.maximumWLikelihood(X, pY, esz=esz)
+
     def learnCondMaxLikelihood(self, X, Y, init_stats= None, ref_stats= None, max_iter= 10, esz= 1.0, lr= 1.0, trace= False):
         '''
         The TM algorithm

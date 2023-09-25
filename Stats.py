@@ -47,7 +47,7 @@ class Stats(object):
             else:
                 self.V.append(S)
 
-        return U,V
+        return self.U,self.V
 
     def initCounts(self, U= None, V= None, esz= 0):
         '''
@@ -72,22 +72,20 @@ class Stats(object):
             self.V= []
 
         if U is None:
+            # Use the current sets
             for S in self.U:
                 self.Nu[S]= np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (
                                         np.prod([self.card[s] for s in S]) * self.cardY)
 
-        else:
-            try:
-                self.Nu = {S: np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (
+        else:# Update the sets
+            self.Nu = {S: np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (
                                     np.prod([self.card[s] for s in S]) * self.cardY) for S in self.U}
-            except:
-                for S in self.U:
-                    np.ones(shape=tuple(self.card[s] for s in S) + (self.cardY,)) * esz / (np.prod([self.card[s] for s in S]) * self.cardY)
 
         if V is None:
+            # Use the current sets
             for S in self.V:
                 self.Nv[S]= np.ones(shape=tuple(self.card[s] for s in S)) * esz / np.prod([self.card[s] for s in S])
-        else:
+        else:# Update the sets
             self.Nv = {S: np.ones(shape=tuple(self.card[s] for s in S)) * esz /
                                     np.prod([self.card[s] for s in S]) for S in self.V}
 
@@ -308,10 +306,10 @@ class Stats(object):
 
         return
 
-    def maximumWLikelihood(self, X, pY, esz= 0.0):
+    def maximumWLikelihood(self, X, pY, U= None, V= None, esz= 0.0):
 
         # Initialize the statistics
-        self.initCounts(esz=esz)
+        self.initCounts(self.U if U is None else U, self.V if V is None else V, esz)
 
         # Count the statistics in the data
         m, n = X.shape

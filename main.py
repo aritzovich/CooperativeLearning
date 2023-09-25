@@ -10,7 +10,7 @@ import pandas
 import sklearn as sk
 
 import IBC
-import Stats as st
+import Stats as sts
 import IBC as ibc
 from sklearn.manifold import MDS
 from matplotlib import pyplot as plt
@@ -250,10 +250,318 @@ def generateData(domain= "ParSum", m=10, n=5, r= 4):
     return D
 
 
+import CondMoments as cmm
+def pruebasCondMoments(dataName= "./data/iris.csv"):
+     data,card= Utils.loadSupervisedData(dataName)
+     X= data[:,:4]
+     Y= np.array(data[:,4], dtype= np.int8)
+
+     moments= cmm.CondMoments(n= 4,card=[],cardY=3,sets=[(4,),()])
+     moments.maximumLikelihood(X,Y)
+
+
+
+def pruebasAgregadoNB(dataNames= ['iris','glass','ionosphere','sonar','segment'], numIter= 10, num_rep=20):
+
+
+
+
+    for dataName in dataNames:
+        D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=3)
+        n = len(card) - 1
+        cardY = card[-1]
+        card = card[:-1]
+        m = D.shape[0]
+        sizes = [int(m * 0.25), int(m * 0.5), int(m * 0.75)]
+        X = D[:, :-1]
+        Y = D[:, -1]
+
+        df = pandas.DataFrame(columns=['seed', 'data', 'size', "n_iter", 'error'])
+        for seed in range(num_rep):
+            np.random.seed(seed)
+            D = D[np.random.permutation(m), :]
+
+            for size in sizes:
+                X = D[:size, :-1]
+                Y = D[:size, -1]
+
+                nb = IBC.getNaiveBayesStruct(n)
+
+                h0 = ibc.IBC(card, cardY)
+                h0.setBNstruct(nb)
+                h0.learnMaxLikelihood(X,Y)
+                error= h0.error(X,Y)
+                min_error= error
+                df.loc[len(df)] = [seed, dataName, size, 0, error]
+
+                p0= h0.getClassProbs(X)
+
+                hi= list()
+                pY= p0.copy()
+                for iter in range(numIter):
+                    hi.append(ibc.IBC(card, cardY))
+                    hi[-1].setBNstruct(nb)
+                    hi[-1].learnMaxWLikelihood(X,pY)
+
+                    pY+= p0 - hi[-1].getClassProbs(X)
+                    #linear scaling and normalization: avoid probs >1 and <0
+                    down= np.min(np.column_stack([np.min(pY, axis=1), np.zeros(size)]), axis=1)
+                    up= np.max(np.column_stack([np.max(pY,axis= 1),np.ones(size)]),axis= 1)
+                    pYnorm= (pY - np.repeat(down,cardY).reshape((size,cardY)))/np.repeat(up- down,cardY).reshape((size,cardY))
+                    predY= np.argmax(pYnorm,axis=1)
+
+                    error= np.average(Y!=predY)
+
+                    if min_error< error:
+                        print("data= "+dataName+" iter= "+str(iter)+" size= "+str(size))
+
+                    min_error= np.min([error,min_error])
+                    df.loc[len(df)]= [seed, dataName, size, iter, min_error]
+
+        # Plot the results
+        color = 'size'
+        style = 'size'
+        num_colors = len(df[color].drop_duplicates().values)
+        palette = sbn.color_palette("husl", num_colors)
+
+        # for size in sizes:
+        #    aux= df[df['$m$']== size]
+        aux = df
+        fig, ax = plt.subplots(1)
+        sbn.lineplot(data=aux, x='n_iter', y='error', style=style, hue=color, palette=palette).set_title(dataName)
+        #                 , palette=palette, hue_order=['TM', 'STM', 'DEF']).set_title(dataName)
+        # ax.set_xscale('log')
+        plt.savefig("ERD_"+dataName + '.pdf', bbox_inches='tight')
+        #plt.show()
+
+
+from QDA import QDA
+from LDA import LDA
+from NaiveBayes import NaiveBayes
+def ERD_models(dataNames= ['iris','glass',  'ionosphere', 'sonar','segment'], numIter= 15, num_rep=20):
+
+    esz= 10.0
+    for classifier in ['NB']:#,'LDA','QDA']:
+        for dataName in dataNames:
+            if classifier=='NB':
+                # Discretize continuous variables
+                D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=5)
+                cardY = card[-1]
+                card = card[:-1]
+            else:
+                D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1)
+                cardY = card[-1]
+            n = len(card) - 1
+            m = D.shape[0]
+            sizes = [int(m * 0.25), int(m * 0.5), int(m * 0.75)]
+            size_test= int(m * 0.75)
+            X = D[:, :-1]
+            Y = D[:, -1]
+            X_test = D[-size_test:, :-1]
+            Y_test = D[-size_test:, -1]
+
+            df = pandas.DataFrame(columns=['seed', 'data', 'size', 'n_iter', 'score', 'error'])
+            for seed in range(num_rep):
+                np.random.seed(seed)
+                D = D[np.random.permutation(m), :]
+
+                for size in sizes:
+                    X = D[:size, :-1]
+                    Y = D[:size, -1]
+
+                    if classifier == 'LDA':
+                        h0 = LDA(n, cardY)
+                    elif classifier == 'QDA':
+                        h0 = QDA(n, cardY)
+                    elif classifier == 'NB':
+                        h0 = NaiveBayes(n,cardY,card)
+                    h0.fit(X,Y,size=esz)
+                    p0= h0.getClassProbs(X)
+                    p0_test= h0.getClassProbs(X_test)
+
+                    error= np.average(Y!= np.argmax(p0, axis=1))
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'train', error]
+                    error_test= np.average(Y_test!= np.argmax(p0_test, axis=1))
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'test', error_test]
+                    min_error= error
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'train_min', min_error]
+                    min_error_test= error_test
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'test_min', min_error_test]
+                    #TODO poner la clasificacion en test
+
+                    hi= list()
+                    pY = p0.copy()
+                    pY_test = p0_test.copy()
+                    for iter in range(1,numIter):
+                        if classifier == 'LDA':
+                            hi.append(LDA(n, cardY))
+                        elif classifier == 'QDA':
+                            hi.append(QDA(n, cardY))
+                        elif classifier == 'NB':
+                            hi.append(NaiveBayes(n, cardY, card))
+                        hi[-1].fit(X,pY,size= esz)
+
+                        pY += p0 - hi[-1].getClassProbs(X)
+                        #linear scaling and normalization: avoid probs >1 and <0
+                        down = np.min(np.column_stack([np.min(pY, axis=1), np.zeros(size)]), axis=1)
+                        up = np.max(np.column_stack([np.max(pY,axis= 1),np.ones(size)]),axis= 1)
+                        pY = (pY - np.repeat(down,cardY).reshape((size,cardY)))/np.repeat(up- down,cardY).reshape((size,cardY))
+
+                        pY_test += p0_test - hi[-1].getClassProbs(X_test)
+                        #linear scaling and normalization: avoid probs >1 and <0
+                        down = np.min(np.column_stack([np.min(pY_test, axis=1), np.zeros(size_test)]), axis=1)
+                        up = np.max(np.column_stack([np.max(pY_test,axis= 1),np.ones(size_test)]),axis= 1)
+                        pY_test = (pY_test - np.repeat(down,cardY).reshape((size_test,cardY)))/np.repeat(up- down,cardY).reshape((size_test,cardY))
+
+                        error = np.average(Y != np.argmax(pY, axis=1))
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'train', error]
+                        error_test = np.average(Y_test != np.argmax(pY_test, axis=1))
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'test', error_test]
+                        if error < min_error:
+                            min_error = error
+                            min_error_test = error_test
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'train_min', min_error]
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'test_min', min_error_test]
+
+                        if min_error < error:
+                            print("data= "+dataName+" iter= "+str(iter)+" size= "+str(size))
+
+            # Plot the results
+            color = 'size'
+            style = 'score'
+            num_colors = len(df[color].drop_duplicates().values)
+            palette = sbn.color_palette("husl", num_colors)
+
+            # for size in sizes:
+            #    aux= df[df['$m$']== size]
+            aux = df
+            fig, ax = plt.subplots(1)
+            sbn.lineplot(data=aux, x='n_iter', y='error', style=style, hue=color, palette=palette).set_title(dataName+"_"+classifier)
+            #                 , palette=palette, hue_order=['TM', 'STM', 'DEF']).set_title(dataName)
+            # ax.set_xscale('log')
+            plt.savefig("ERD_"+classifier+"_"+dataName + '.pdf', bbox_inches='tight')
+            #plt.show()
+
+def ERD_stats(dataNames= ['iris','glass',  'ionosphere', 'sonar','segment'], numIter= 15, num_rep=20):
+
+    esz= 10.0
+    for classifier in ['NB','LDA','QDA']:
+        for dataName in dataNames:
+            if classifier=='NB':
+                # Discretize continuous variables
+                D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1, bins=5)
+                cardY = card[-1]
+                card = card[:-1]
+            else:
+                D, card = utl.loadSupervisedData(dataName='./data/' + dataName + '.csv', skipHeader=1)
+                cardY = card[-1]
+            n = len(card) - 1
+            m = D.shape[0]
+            sizes = [int(m * 0.25), int(m * 0.5), int(m * 0.75)]
+            size_test= int(m * 0.75)
+            X = D[:, :-1]
+            Y = D[:, -1]
+            X_test = D[-size_test:, :-1]
+            Y_test = D[-size_test:, -1]
+
+            df = pandas.DataFrame(columns=['seed', 'data', 'size', 'n_iter', 'score', 'error'])
+            for seed in range(num_rep):
+                np.random.seed(seed)
+                D = D[np.random.permutation(m), :]
+
+                for size in sizes:
+                    X = D[:size, :-1]
+                    Y = D[:size, -1]
+
+                    if classifier == 'LDA':
+                        h0 = LDA(n, cardY)
+                    elif classifier == 'QDA':
+                        h0 = QDA(n, cardY)
+                    elif classifier == 'NB':
+                        h0 = NaiveBayes(n,cardY,card)
+                    h0.fit(X,Y,size=esz)
+                    p0= h0.getClassProbs(X)
+                    p0_test= h0.getClassProbs(X_test)
+
+                    error= np.average(Y!= np.argmax(p0, axis=1))
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'train', error]
+                    error_test= np.average(Y_test!= np.argmax(p0_test, axis=1))
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'test', error_test]
+                    min_error= error
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'train_min', min_error]
+                    min_error_test= error_test
+                    df.loc[len(df)] = [seed, dataName, size, 0, 'test_min', min_error_test]
+                    #TODO poner la clasificacion en test
+
+                    if classifier == 'LDA':
+                        h = LDA(n, cardY)
+                    elif classifier == 'QDA':
+                        h = QDA(n, cardY)
+                    elif classifier == 'NB':
+                        h = NaiveBayes(n, cardY, card)
+                    h.fit(X, Y, size=esz*5)
+
+                    pY = p0.copy()
+                    pY_test = p0_test.copy()
+                    for iter in range(1, numIter):
+                        if classifier == 'LDA':
+                            hi = LDA(n, cardY)
+                        elif classifier == 'QDA':
+                            hi = QDA(n, cardY)
+                        elif classifier == 'NB':
+                            hi = NaiveBayes(n, cardY, card)
+                        hi.fit(X, pY, size= esz)
+
+                        # ERD updating rule
+                        h.stats.add(h0.stats)
+                        h.stats.subtract(hi.stats)
+                        h.computeParams()
+
+                        pY = h.getClassProbs(X)
+                        #linear scaling and normalization: avoid probs >1 and <0
+                        down = np.min(np.column_stack([np.min(pY, axis=1), np.zeros(size)]), axis=1)
+                        up = np.max(np.column_stack([np.max(pY,axis= 1),np.ones(size)]),axis= 1)
+                        pY = (pY - np.repeat(down,cardY).reshape((size,cardY)))/np.repeat(up- down,cardY).reshape((size,cardY))
+
+                        pY = h.getClassProbs(X_test)
+                        #linear scaling and normalization: avoid probs >1 and <0
+                        down = np.min(np.column_stack([np.min(pY_test, axis=1), np.zeros(size_test)]), axis=1)
+                        up = np.max(np.column_stack([np.max(pY_test,axis= 1),np.ones(size_test)]),axis= 1)
+                        pY_test = (pY_test - np.repeat(down,cardY).reshape((size_test,cardY)))/np.repeat(up- down,cardY).reshape((size_test,cardY))
+
+                        error = np.average(Y != np.argmax(pY, axis=1))
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'train', error]
+                        error_test = np.average(Y_test != np.argmax(pY_test, axis=1))
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'test', error_test]
+                        if error < min_error:
+                            min_error = error
+                            min_error_test = error_test
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'train_min', min_error]
+                        df.loc[len(df)] = [seed, dataName, size, iter, 'test_min', min_error_test]
+
+                        if min_error < error:
+                            print("data= "+dataName+" iter= "+str(iter)+" size= "+str(size))
+
+            # Plot the results
+            color = 'size'
+            style = 'score'
+            num_colors = len(df[color].drop_duplicates().values)
+            palette = sbn.color_palette("husl", num_colors)
+
+            # for size in sizes:
+            #    aux= df[df['$m$']== size]
+            aux = df
+            fig, ax = plt.subplots(1)
+            sbn.lineplot(data=aux, x='n_iter', y='error', style=style, hue=color, palette=palette).set_title(dataName+"_"+classifier)
+            #                 , palette=palette, hue_order=['TM', 'STM', 'DEF']).set_title(dataName)
+            # ax.set_xscale('log')
+            plt.savefig("ERD_stats_"+classifier+"_"+dataName + '.pdf', bbox_inches='tight')
+            #plt.show()
+
+
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-
-    Utils.loadSupervisedData("./data/breast-cancer.csv")
-
-    TM_VS_DEF()
+    ERD_stats()
+    #pruebasCondMoments()
 
