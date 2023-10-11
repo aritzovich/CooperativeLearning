@@ -6,7 +6,7 @@ class Classifier(object):
         self.n= n
         self.cardY= cardY
 
-    def fit(self,X,Y,size= 0):
+    def fit(self, X, Y, size= 1):
         '''
         Learn the classifier from data
 
@@ -14,6 +14,7 @@ class Classifier(object):
         Y: class labels. When Y is a matrix, Y is a probabilistic labeling
         size: equivalent sample size
         '''
+
         self.computeStatistics(X, Y, size)
         self._computeParams(self.stats)
 

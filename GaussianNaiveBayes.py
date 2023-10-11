@@ -4,10 +4,11 @@ import CondMoments as cm
 import numpy as np
 from scipy.stats import multivariate_normal
 
-class GaussianNaiveBayes(QDA):
+class GaussianNaiveBayes(Classifier):
     '''
-    Linear discriminant analysis
-    arg max_y p(y) · prod_i sigma_i(y)^-1/2 · exp{(x_i-mu_i(y)) · sigma_i(y)^-1·(x_i-mu_i(y))}
+    Gaussian naive Bayes classifier
+
+
     '''
 
     def __init__(self, n, cardY):
@@ -20,11 +21,40 @@ class GaussianNaiveBayes(QDA):
         X: unlabeled instances. Continuos variables.
         '''
         m,n= X.shape
-        py= np.zeros((m,self.cardY))
+        pY= np.zeros((m,self.cardY))
         for y in range(self.cardY):
-            py[:,y]= self.py[y]* self.py[y]* multivariate_normal.pdf(X,mean=self.mu_y[y],cov= np.diagonal(self.cov_y[y]))
+            pY[:,y]= self.py[y]* multivariate_normal.pdf(X,mean=self.mu_y[y],cov= np.diag(self.cov_y[y]))
 
         #normalize p(y,x) to obtain p(y|x) for each x in X
-        py/= np.repeat(np.sum(py,axis=1), self.cardY).reshape((m, self.cardY))
+        pY/= np.repeat(np.sum(pY,axis=1), self.cardY).reshape((m, self.cardY))
 
-        return py
+        #TODO: por alguna razon que se me escapa solo predice las dos primeras clases cuando se aprende por maxima verosimilitud
+        return pY
+
+    def _computeParams(self, stats):
+        '''
+        Compute the parameters of the classifier given the input statistics
+        '''
+
+        self.py= np.array(stats.M0y[()])
+        self.py/= np.sum(self.py)
+
+        self.mu_y= np.array([stats.M1y[()][y]/stats.M0y[()][y] for y in range(self.cardY)])
+        self.cov_y= np.array([np.diagonal(stats.M2y[()][y]) / stats.M0y[()][y] - stats.M1y[()][y]**2 / stats.M0y[()][y]**2 for y in range(self.cardY)])
+
+
+    def computeStatistics(self,X,Y,size= 1):
+        '''
+        Compute the statistics from the input training set
+
+        X: unlabeled instances
+        Y: class labels. When Y is a matrix, Y is a probabilistic labeling
+        size: equivalent sample size
+        '''
+
+        self.stats= cm.CondMoments(self.n,[],self.cardY,[(self.n,)])
+
+        if Y.ndim== 1:
+            self.stats.maximumLikelihood(X,Y,esz=size)
+        elif Y.ndim== 2:
+            self.stats.maximumWLikelihood(X,Y,esz=size)

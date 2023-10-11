@@ -33,38 +33,42 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
         classInd= n-1
 
     # Determine the nature of the variables (categorical or continuous)
-    card = np.zeros(n,dtype=int)
+    card = np.zeros(n-1,dtype=int)
+    cardY= 0
     for i in range(n):
         if i != classInd:
             vals= np.unique(text[:, i])
             if str.isalpha(text[0, i]):# if all characters in the string are alphabetic or there is at least one character
-                card[i]= len(vals)
+                card[i-(i>classInd)]= len(vals)
             elif isfloat(text[0, i]):# if the string is a number
                 if len(vals)<= maxDiscVals:
-                    card[i] = len(vals)
+                    card[i-(i>classInd)] = len(vals)
                 else:
-                    card[i] = sys.maxsize
+                    card[i-(i>classInd)] = sys.maxsize
             else:#Son categoricos
-                card[i] = len(vals)
+                card[i-(i>classInd)] = len(vals)
 #                if len(vals) <= maxDiscVals:
 #                    card[i] = len(vals)
 #                else:
 #                    card[i] = sys.maxsize
         else:
-            card[i]= len(np.unique(text[:,i]))
+            cardY= len(np.unique(text[:,i]))
 
 
     varData= list()
     for i in range(n):
-        if card[i]== sys.maxsize:
-            varData.append(np.array([float(x) for x in text[:, i]]))
+        if i!= classInd:
+            if card[i-(i>classInd)]== sys.maxsize:
+                varData.append(np.array([float(x) for x in text[:, i]]))
+            else:
+                varData.append(np.unique(text[:, i], return_inverse=True)[1])
         else:
-            varData.append(np.unique(text[:, i], return_inverse=True)[1])
+            Y = np.unique(text[:, i], return_inverse=True)[1].astype(int)
 
     if bins is not None:
-        data = np.zeros((m,n),dtype=int)
+        X = np.zeros((m,n-1),dtype=int)
         #Discretize continuous data using equal frequency
-        for i in range(n):
+        for i in range(n-1):
             if card[i]== sys.maxsize:
                 ordered = np.sort(varData[i])
                 cut = [ordered[int((j + 1) * m / bins) - 1] for j in range(bins)]
@@ -73,17 +77,17 @@ def loadSupervisedData(dataName, sep=',', skipHeader= 0,  classInd=None, maxDisc
                     for k in range(bins):
                         if varData[i][j] <= cut[k]:
                             break
-                    data[j,i] = k
+                    X[j,i] = k
 
                 card[i]= bins
             else:
-                data[:,i]= varData[i]
+                X[:,i]= varData[i]
     else:
-        data = np.zeros((m,n),dtype=float)
-        for i in range(n):
-            data[:,i]= varData[i]
+        X = np.zeros((m,n-1),dtype=float)
+        for i in range(n-1):
+            X[:,i]= varData[i]
 
-    return data,card
+    return X,Y,card,cardY
 
 def isfloat(str):
     try:

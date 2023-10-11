@@ -8,16 +8,21 @@ class CondMoments(object):
 
     This is the extension of Stats class by adding the moments of all the continuous variables.
 
-    The subsets of variables describe de subsets of discrete variables selected. The moments of all the continous variables are modeled.
+    The subsets of variables describe de subsets of discrete variables selected. The moments of all the continous
+    variables are modeled.
 
     The data is organized as an np.array where rows correspond to labeled instances and columns to variables. The
-    [0,...,len(self.cardY)-1] variables are discrete, [len(self.cardY),...,n-1] are continuous, and index n refers to
+    [0,...,len(self.card)-1] variables are discrete, [len(self.card),...,n-1] are continuous, and index n refers to
     the class variable
+
+    TODO se puede mejorar creando una clase moments donde se especifica el maximo orden. Despues un unico diccionario de
+    momentos en lugar de tener tantos diccionarios como momentos.
 
     '''
 
-    def __init__(self, n, card, cardY, sets= None, X= None, Y=None):
+    def __init__(self, n, card, cardY, sets= None, X= None, Y=None, size= 0):
         '''
+        Constructor
 
         :param n: Number of predictor variables
         :param card: cardinality of the discrete variables
@@ -49,33 +54,33 @@ class CondMoments(object):
             #make a copy and transform to tuples
 
             U,V= self._getUandVfromSets(sets)
-            self.initCounts(U,V)
+            self.initCounts(U, V, esz= size)
             # learn maximum likelihood statistics
             if X is not None and Y is not None:
-                self.learnMoments(X,Y)
+                self.maximumLikelihood(X, Y, esz= size)
         else:
             # Moments associated to subsets of cont vars conditioned to discrete vars
             # Supervised moments
-            # Indexing: self.M0u[self.U[i]][x[self.U[i][0]]] -> supervised moment 1 of contVars U[i][1] for the configuration
+            # Indexing: self.M0y[self.U[i]][x[self.U[i][0]]] -> supervised moment 1 of contVars U[i][1] for the configuration
             # of discVars x[self.U[i][0]]
 
             # Order 0 moments
-            # M0u[vars][discConfig] -> array[classConfig]
-            self.M0u = None
+            # M0y[vars][discConfig] -> array[classConfig]
+            self.M0y = None
             # Order 1 moments,
-            # M1u[vars][discConfig] -> array[contVars x classConfig]
-            self.M1u = None
+            # M1y[vars][discConfig] -> array[contVars x classConfig]
+            self.M1y = None
             # Order 2 moments
-            # M2u[vars][discConfig] -> array[contVars x contVars x classConfig]
-            self.M2u = None
-            # Indexing: self.M0v[self.V[i]][x[self.V[i][0]]] -> unsupervised moment 1 of contVars V[i][1] for the configuration
+            # M2y[vars][discConfig] -> array[contVars x contVars x classConfig]
+            self.M2y = None
+            # Indexing: self.M0[self.V[i]][x[self.V[i][0]]] -> unsupervised moment 1 of contVars V[i][1] for the configuration
             # of discVars x[self.U[i][0]]
-            # M0u[vars][discConfig] -> array[1]
-            self.M0v = None
-            # M1u[vars][discConfig] -> array[contVars]
-            self.M1v = None
-            # M2u[vars][discConfig] -> array[contVars x contVars]
-            self.M2v = None
+            # M0y[vars][discConfig] -> array[1]
+            self.M0 = None
+            # M1y[vars][discConfig] -> array[contVars]
+            self.M1 = None
+            # M2y[vars][discConfig] -> array[contVars x contVars]
+            self.M2 = None
 
     def _getUandVfromSets(self, sets):
         # put the tuples in standard format, tuple(set(whatever))
@@ -117,58 +122,66 @@ class CondMoments(object):
         #Las primeras len(self.card) son discretas. El resto continuas.
         if U is None:
             for S in self.U:
-                self.M0u[S]= np.ones(shape=tuple(self.card[disc] for disc in S) + (self.cardY,)) * esz
-                self.M1u[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY,self.d))
-                self.M2u[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY,self.d,self.d))
+                self.M0y[S]= np.ones(shape=tuple(self.card[disc] for disc in S) + (self.cardY,)) * esz/self.cardY
+                self.M1y[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY,self.d))
+                self.M2y[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY,self.d,self.d))
 
         else:
-            self.M0u = {S: np.ones(shape=tuple(self.card[disc] for disc in S) + (self.cardY,)) * esz for S in self.U}
-            self.M1u = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY, self.d)) for S in self.U}
-            self.M2u = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY, self.d, self.d)) for S in self.U}
+            self.M0y = {S: np.ones(shape=tuple(self.card[disc] for disc in S) + (self.cardY,)) * esz/self.cardY for S in self.U}
+            self.M1y = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY, self.d)) for S in self.U}
+            self.M2y = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.cardY, self.d, self.d)) for S in self.U}
 
 
         if V is None:
             for S in self.V:
-                self.M0v[S]= np.ones(shape=tuple(self.card[disc] for disc in S)) * esz
-                self.M1v[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d,))
-                self.M2v[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d,self.d))
+                self.M0[S]= np.ones(shape=tuple(self.card[disc] for disc in S)) * esz
+                self.M1[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d,))
+                self.M2[S]= np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d,self.d))
         else:
-            self.M0v = {S: np.ones(shape=tuple(self.card[disc] for disc in S)) * esz for S in self.V}
-            self.M1v = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d,)) for S in self.V}
-            self.M2v = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d, self.d)) for S in self.V}
+            self.M0 = {S: np.ones(shape=tuple(self.card[disc] for disc in S)) * esz for S in self.V}
+            self.M1 = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d,)) for S in self.V}
+            self.M2 = {S: np.zeros(shape=tuple(self.card[disc] for disc in S) + (self.d, self.d)) for S in self.V}
 
         # Avoid problems with the count associated to the empty set of variables
         if () in self.U:
-            self.M0u[()] = np.ones(shape=(self.cardY,)) * esz
-            self.M1u[()] = np.zeros(shape=(self.cardY, self.d))
-            self.M2u[()] = np.zeros(shape=(self.cardY, self.d, self.d))
+            self.M0y[()] = np.ones(shape=(self.cardY,)) * esz/self.cardY
+            self.M1y[()] = np.zeros(shape=(self.cardY, self.d))
+            self.M2y[()] = np.zeros(shape=(self.cardY, self.d, self.d))
         if () in self.V:
-            self.M0v[()] = np.ones(shape=1) * esz
-            self.M1v[()] = np.zeros(shape=(self.d,))
-            self.M2v[()] = np.zeros(shape=(self.d,self.d))
+            self.M0[()] = np.ones(shape=1) * esz
+            self.M1[()] = np.zeros(shape=(self.d,))
+            self.M2[()] = np.zeros(shape=(self.d,self.d))
 
         # Priors towards varianze= 1 cov= 0
+        # TODO inspect all configurations of discrete variables, not only the class. Meterlo en donde se inicializa el momento de orden 2
         for S in self.U:
-            #TODO inspect all configurations of discrete variables, not only the class
             for y in range(self.cardY):
-                self.M2u[S][y] = np.diag(np.ones(self.d) * esz)
+                self.M2y[S][y] = np.diag(np.ones(self.d) * esz/self.cardY)
+        for S in self.V:
+            for y in range(self.cardY):
+                self.M2[S] = np.diag(np.ones(self.d) * esz)
 
         return
 
+    #TODO quitar todo rastro de U y V en CondMoments y en Stats. Reemplazar por Sy y S
     def copy(self):
         '''
         Creates a copy of the statistics self.
 
         :return: A copy of the statistics self.
         '''
-        contStats= ContStats(self.n,self.card,self.cardY)
-        contStats.initCounts(self.U,self.V)
+        stats= CondMoments(self.n,self.card,self.cardY)
+        stats.initCounts(self.U,self.V)
         for V in self.V:
-            contStats.Nv[V]=self.Nv[V].copy()
+            stats.M0[V] = self.M0[V].copy()
+            stats.M1[V] = self.M1[V].copy()
+            stats.M2[V] = self.M2[V].copy()
         for U in self.U:
-            contStats.Nu[U]=self.Nu[U].copy()
+            stats.M0y[U] = self.M0y[U].copy()
+            stats.M1y[U] = self.M1y[U].copy()
+            stats.M2y[U] = self.M2y[U].copy()
 
-        return contStats
+        return stats
 
     def emptyCopy(self):
         '''
@@ -187,41 +200,55 @@ class CondMoments(object):
         :return:
         '''
 
-        if bool(self.Nv):
+        if bool(self.M0):
             return np.sum(next(iter(self.Nv.values())))
 
-        if bool(self.Nu):
+        if bool(self.M0y):
             return np.sum(next(iter(self.Nu.values())))
 
         return 0
 
-    #//TODO hacer esto
     def add(self, stats, prop= 1.0):
         for S in stats.U:
             if S in self.U:
-                self.Nu[S] += stats.Nu[S] * prop
+                self.M0y[S] += stats.M0y[S] * prop
+                self.M1y[S] += stats.M1y[S] * prop
+                self.M2y[S] += stats.M2y[S] * prop
             else:
-                self.Nu.update({S:stats.Nu[S] * prop})
+                self.M0y.update({S:stats.M0y[S] * prop})
+                self.M1y.update({S:stats.M1y[S] * prop})
+                self.M2y.update({S:stats.M2y[S] * prop})
 
         for S in stats.V:
             if S in self.V:
-                self.Nv[S] += stats.Nv[S] * prop
+                self.M0[S] += stats.M0[S] * prop
+                self.M1[S] += stats.M1[S] * prop
+                self.M2[S] += stats.M2[S] * prop
             else:
-                self.Nv.update({S: stats.Nv[S] * prop})
+                self.M0.update({S: stats.M0[S] * prop})
+                self.M1.update({S: stats.M1[S] * prop})
+                self.M2.update({S: stats.M2[S] * prop})
 
-    #//TODO hacer esto
     def subtract(self, stats, prop= 1.0):
         for S in stats.U:
             if S in self.U:
-                self.Nu[S] -= stats.Nu[S] * prop
+                self.M0y[S] -= stats.M0y[S] * prop
+                self.M1y[S] -= stats.M1y[S] * prop
+                self.M2y[S] -= stats.M2y[S] * prop
             else:
-                self.Nu.update({S:-stats.Nu[S]} * prop)
+                self.M0y.update({S:-stats.M0y[S]} * prop)
+                self.M1y.update({S:-stats.M1y[S]} * prop)
+                self.M2y.update({S:-stats.M2y[S]} * prop)
 
         for S in stats.V:
             if S in self.V:
-                self.Nv[S] -= stats.Nv[S] * prop
+                self.M0[S] -= stats.M0[S] * prop
+                self.M1[S] -= stats.M1[S] * prop
+                self.M2[S] -= stats.M2[S] * prop
             else:
-                self.Nv.update({S: -stats.Nv[S] * prop})
+                self.M0.update({S: -stats.M0[S] * prop})
+                self.M1.update({S: -stats.M1[S] * prop})
+                self.M2.update({S: -stats.M2[S] * prop})
 
     #//TODO testar esto
     def update(self, X, pY, ref_stats, lr=1.0):
@@ -296,23 +323,23 @@ class CondMoments(object):
         # Count the statistics in the data
         m,n= X.shape
         for S in self.U:
-            M0u= self.M0u[S]
-            M1u= self.M1u[S]
-            M2u= self.M2u[S]
+            M0y= self.M0y[S]
+            M1y= self.M1y[S]
+            M2y= self.M2y[S]
             for i in range(m):
                 #//TODO comprobar que hay que poner [Y[i]] y no [Y[i],:] o [Y[i],]
-                M0u[tuple(discX[i,S])][Y[i]] += 1
-                M1u[tuple(discX[i,S])][Y[i]] += contX[i,:]
-                M2u[tuple(discX[i,S])][Y[i]] += np.dot(contX[i,:].reshape(self.d,1), contX[i,:].reshape(1,self.d))
+                M0y[tuple(discX[i,S])][Y[i]] += 1
+                M1y[tuple(discX[i,S])][Y[i]] += contX[i,:]
+                M2y[tuple(discX[i,S])][Y[i]] += np.dot(contX[i,:].reshape(self.d,1), contX[i,:].reshape(1,self.d))
 
         for S in self.V:
-            M0v= self.M0v[S]
-            M1v= self.M1v[S]
-            M2v= self.M2v[S]
+            M0= self.M0[S]
+            M1= self.M1[S]
+            M2= self.M2[S]
             for i in range(m):
-                M0v[tuple(discX[i,S])] += 1
-                M1v[tuple(discX[i,S])] += contX[i,:]
-                M2v[tuple(discX[i,S])] += np.dot(contX[i,:].reshape(self.d,1), contX[i,:].reshape(1,self.d))
+                M0[tuple(discX[i,S])] += 1
+                M1[tuple(discX[i,S])] += contX[i,:]
+                M2[tuple(discX[i,S])] += np.dot(contX[i,:].reshape(self.d,1), contX[i,:].reshape(1,self.d))
 
         return
 
@@ -327,27 +354,27 @@ class CondMoments(object):
         # Count the statistics in the data
         m, n = X.shape
         for S in self.U:
-            M0u = self.M0u[S]
-            M1u = self.M1u[S]
-            M2u = self.M2u[S]
+            M0y = self.M0y[S]
+            M1y = self.M1y[S]
+            M2y = self.M2y[S]
             for i in range(m):
                 for y in range(self.cardY):
-                    M0u[tuple(discX[i, S])][y] += pY[i,y]
+                    M0y[tuple(discX[i, S])][y] += pY[i,y]
+                    M1y[tuple(discX[i, S])][y] += pY[i,y]* contX[i, :]
                     #//TODO ver si cuadra
-                    M1u[tuple(discX[i, S])][y] += pY[i,y]* contX[i, :]
-                    #//TODO ver si cuadra
-                    if 0> np.min(np.diagonal(pY[i,y]* np.dot(contX[i, :].reshape(self.d, 1), contX[i, :].reshape(1, self.d)))):
-                        None
-                    M2u[tuple(discX[i, S])][y] += pY[i,y]* np.dot(contX[i, :].reshape(self.d, 1), contX[i, :].reshape(1, self.d))
+                    M2y[tuple(discX[i, S])][y] += pY[i,y]* np.dot(contX[i, :].reshape(self.d, 1), contX[i, :].reshape(1, self.d))
+
+            #TODO Alternativa eficiente:
+            #M1y[y]= np.dot(pY[:,y].T,X)
 
         for S in self.V:
-            M0v = self.M0v[S]
-            M1v = self.M1v[S]
-            M2v = self.M2v[S]
+            M0 = self.M0[S]
+            M1 = self.M1[S]
+            M2 = self.M2[S]
             for i in range(m):
-                M0v[tuple(discX[i,S])] += 1
-                M1v[tuple(discX[i,S])] += contX[i,:]
-                M2v[tuple(discX[i,S])] += np.dot(contX[i,:].reshape(self.d,1), contX[i,:].reshape(1,self.d))
+                M0[tuple(discX[i,S])] += 1
+                M1[tuple(discX[i,S])] += contX[i,:]
+                M2[tuple(discX[i,S])] += np.dot(contX[i,:].reshape(self.d,1), contX[i,:].reshape(1,self.d))
 
         #for S in self.Nu.keys():
         #    print(str(S) + ":\t" + str(np.sum(self.Nu[S])))

@@ -77,12 +77,12 @@ class QDA(Classifier):
         '''
         key= tuple()
 
-        self.py= np.array(stats.M0u[key])
+        self.py= np.array(stats.M0y[key])
         self.py/= np.sum(self.py)
 
-        self.mu_y= [np.array(stats.M1u[key][y])/stats.M0u[key][y] for y in range(self.cardY)]
+        self.mu_y= [np.array(stats.M1y[key][y])/stats.M0y[key][y] for y in range(self.cardY)]
 
-        self.cov_y= [np.array(stats.M2u[key][y])/stats.M0u[key][y] for y in range(self.cardY)]
+        self.cov_y= [np.array(stats.M2y[key][y])/stats.M0y[key][y] for y in range(self.cardY)]
         #self.prec_y= [np.linalg.inv(self.cov_y[y]) for y in range(self.cardY)]
         #self.det_y= [np.sqrt(np.linalg.det(self.cov_y[y])) for y in range(self.cardY)]
 

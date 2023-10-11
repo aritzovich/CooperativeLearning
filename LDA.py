@@ -34,7 +34,7 @@ class LDA(Classifier):
         m,n= X.shape
         py= np.zeros((m,self.cardY))
         for y in range(self.cardY):
-            py[:,y]= multivariate_normal.pdf(X, mean=self.mu_y[y], cov= self.cov)
+            py[:,y]= self.py[y] * multivariate_normal.pdf(X, mean=self.mu_y[y], cov= self.cov)
         #normalize p(y,x) to obtain p(y|x) for each x in X
         py/= np.repeat(np.sum(py,axis=1), self.cardY).reshape((m, self.cardY))
 
@@ -73,12 +73,12 @@ class LDA(Classifier):
         '''
         key= tuple()
 
-        self.py= np.array(stats.M0u[key])
+        self.py= np.array(stats.M0y[key])
         self.py/= np.sum(self.py)
 
-        self.mu_y= [np.array(stats.M1u[key][y])/stats.M0u[key][y] for y in range(self.cardY)]
+        self.mu_y= [np.array(stats.M1y[key][y])/stats.M0y[key][y] for y in range(self.cardY)]
 
-        self.cov= [np.array(stats.M2v[key])/stats.M0v[key]]
+        self.cov= [np.array(stats.M2[key])/stats.M0[key]]
         #self.prec_y= [np.linalg.inv(self.cov_y[y]) for y in range(self.cardY)]
         #self.det_y= [np.sqrt(np.linalg.det(self.cov_y[y])) for y in range(self.cardY)]
 
